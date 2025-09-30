@@ -24,7 +24,7 @@ const StatusBadge = ({ status }) => {
 
 export default function SalesScreen() {
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const filteredData = useMemo(() => {
     return mockSalesData.filter(item =>
       item.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -37,12 +37,12 @@ export default function SalesScreen() {
       <header className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-4">
           <svg className="h-10 w-10 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
-             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-12h2v6h-2zm0 8h2v2h-2z" fill="none"/><path d="M12 2c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.17c-2.5-1.44-3.5-3.03-3.5-4.67 0-1.64 1.3-3.14 3.5-4.17.2-.1.45.03.55.25.12.28.01.58-.22.75-1.91.88-2.83 2.1-2.83 3.17s.92 2.29 2.83 3.17c.23.17.34.47.22.75-.1.22-.35.35-.55.25z"/>
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-12h2v6h-2zm0 8h2v2h-2z" fill="none" /><path d="M12 2c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.17c-2.5-1.44-3.5-3.03-3.5-4.67 0-1.64 1.3-3.14 3.5-4.17.2-.1.45.03.55.25.12.28.01.58-.22.75-1.91.88-2.83 2.1-2.83 3.17s.92 2.29 2.83 3.17c.23.17.34.47.22.75-.1.22-.35.35-.55.25z" />
           </svg>
           <h1 className="text-3xl font-bold text-gray-800">Ventas Base</h1>
         </div>
       </header>
-      
+
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <div className="relative w-full md:w-1/3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
