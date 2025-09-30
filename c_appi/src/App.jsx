@@ -13,21 +13,13 @@ function App() {
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => setActiveScreen('inventory')}
-                className={`px-3 py-2 rounded-md text-sm font-medium ${
-                  activeScreen === 'inventory'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-700 hover:bg-blue-100'
-                }`}
+                className={`relative inline-block p-px font-semibold leading-6 text-white bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95`}
               >
                 Inventario
               </button>
               <button
                 onClick={() => setActiveScreen('sales')}
-                className={`px-3 py-2 rounded-md text-sm font-medium ${
-                  activeScreen === 'sales'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-700 hover:bg-blue-100'
-                }`}
+                className={`relative inline-block p-px font-semibold leading-6 text-white bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95`}
               >
                 Ventas
               </button>

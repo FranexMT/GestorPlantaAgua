@@ -1,13 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Download, Search, Edit, Eye, Archive } from 'lucide-react';
-// Se asume que este entorno tiene Tailwind CSS configurado.
 
 // --- DATOS DE EJEMPLO SIMULADOS (Para que la tabla se vea llena) ---
 const mockInventoryData = [
+
+    { id: 'P-001', name: 'Garrafón 20L', stock: 25, price: 500.00, lastUpdate: '25/09/2025' },
+    { id: 'P-002', name: 'Botella PET 1L', stock: 30, price: 300.00, lastUpdate: '25/09/2025' },
+    { id: 'P-003', name: 'Pack 6 PET 500mls', stock: 10, price: 990.00, lastUpdate: '24/09/2025' },
+    { id: 'P-005', name: 'Botella PET 500ml', stock: 5, price: 150.00, lastUpdate: '25/09/2025' }, // Bajo stock
+
     { id: 'P-001', name: 'Garrafón 20L', stock: 150, price: 500.00, lastUpdate: '25/09/2025' },
-    { id: 'P-002', name: 'Botella PET 1L', stock: 450, price: 300.00, lastUpdate: '25/09/2025' },
+    { id: 'P-002', name: 'Botella PET 1L', stock: 5, price: 300.00, lastUpdate: '25/09/2025' },
     { id: 'P-003', name: 'Pack 6 PET 500mls', stock: 80, price: 990.00, lastUpdate: '24/09/2025' },
     { id: 'P-005', name: 'Botella PET 500ml', stock: 10, price: 150.00, lastUpdate: '25/09/2025' }, // Bajo stock
+    { id: 'P-001', name: 'Garrafón 20L', stock: 75, price: 500.00, lastUpdate: '25/09/2025' },
 ];
 
 export default function App() {
@@ -56,17 +62,10 @@ export default function App() {
                 <div className="flex gap-2 w-full md:w-auto">
                     <button
                         onClick={() => handleActionPlaceholder('Crear Nuevo', 'N/A')}
-                        className="flex items-center justify-center flex-1 md:flex-none gap-2 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30"
+                        className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95"
                     >
                         <Plus size={18} />
-                        Nuevo (Placeholder)
-                    </button>
-                    <button
-                        onClick={() => handleActionPlaceholder('Exportar', 'N/A')}
-                        className="flex items-center justify-center flex-1 md:flex-none gap-2 bg-gray-700 text-gray-100 font-bold py-2 px-4 border border-gray-600 rounded-lg hover:bg-gray-600 transition-colors"
-                    >
-                        <Download size={18} />
-                        Exportar (Placeholder)
+                        Nuevo Producto
                     </button>
                 </div>
             </div>
@@ -87,11 +86,13 @@ export default function App() {
                         {filteredData.map((product, index) => {
                             const rowClass = index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-700/50';
 
-                            // Lógica de StockBadge inline
-                            const stockLow = product.stock < 50;
-                            const stockBadgeClasses = stockLow
-                                ? 'bg-red-700/30 text-red-300'
-                                : 'bg-green-700/30 text-green-300';
+                            let stockBadgeClasses = 'bg-green-700/30 text-green-300'; // Suficiente stock
+
+                            if (product.stock < 10) {
+                                stockBadgeClasses = 'bg-red-700/30 text-red-300'; // Muy bajo
+                            } else if (product.stock < 20) {
+                                stockBadgeClasses = 'bg-yellow-700/30 text-yellow-300'; // Advertencia
+                            }
 
                             return (
                                 <tr
@@ -110,15 +111,21 @@ export default function App() {
                                         <div className="flex gap-3">
                                             <button
                                                 onClick={() => handleActionPlaceholder('Editar', product.id)}
-                                                className="text-blue-500 hover:text-blue-300"
-                                                title="Editar Producto (Placeholder)"
+
+                                                className="relative inline-block p-px font-semibold leading-6 text-blue-500 
+                                                hover:text-blue-300 bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 
+                                                transition-transform duration-300 ease-in-out hover:scale-115 active:scale-95 hover:ring-2 hover:ring-blue-500"
+                                                title="Editar Producto"
                                             >
                                                 <Edit size={18} />
                                             </button>
                                             <button
                                                 onClick={() => handleActionPlaceholder('Archivar', product.id)}
-                                                className="text-red-500 hover:text-red-300"
-                                                title="Archivar/Eliminar (Placeholder)"
+
+                                                className="relative inline-block p-px font-semibold leading-6 text-red-500 
+                                                hover:text-red-300 bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 
+                                                transition-transform duration-300 ease-in-out hover:scale-115 active:scale-95 hover:ring-2 hover:ring-red-500"
+                                                title="Archivar/Eliminar"
                                             >
                                                 <Archive size={18} />
                                             </button>
