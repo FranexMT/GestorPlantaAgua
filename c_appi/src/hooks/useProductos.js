@@ -1,11 +1,6 @@
 // hooks/useProductos.js
 import { useState, useEffect } from 'react';
-import {
-  getProducto,
-  onSubmitProducto,
-  updateProducto,
-  deleteProducto
-} from '../conexiones/crudInventario';
+
 
 export const useProductos = () => {
   const [productos, setProductos] = useState([]);

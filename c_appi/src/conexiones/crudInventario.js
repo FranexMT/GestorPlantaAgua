@@ -1,11 +1,7 @@
 import { db } from '../config/firebase';
 import {
-  getDocs,
   collection,
   addDoc,
-  deleteDoc,
-  updateDoc,
-  doc
 } from 'firebase/firestore';
 
 const productosCollection = collection(db, "productos");
