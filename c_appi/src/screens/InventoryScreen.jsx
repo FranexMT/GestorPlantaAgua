@@ -1,21 +1,30 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Download, Search, Edit, Eye, Archive } from 'lucide-react';
+import { Plus, Search, Edit, Archive } from 'lucide-react';
 
-// --- DATOS DE EJEMPLO SIMULADOS (Para que la tabla se vea llena) ---
-const initialInventoryData  = [
-    { id: 'P-001', name: 'Garrafón 20L', stock: 25, price: 500.00, lastUpdate: '25/09/2025' },
-    { id: 'P-002', name: 'Botella PET 1L', stock: 30, price: 300.00, lastUpdate: '25/09/2025' },
-    { id: 'P-003', name: 'Pack 6 PET 500mls', stock: 10, price: 990.00, lastUpdate: '24/09/2025' },
-    { id: 'P-005', name: 'Botella PET 500ml', stock: 5, price: 150.00, lastUpdate: '25/09/2025' }, // Bajo stock
-];
+// Importa el hook personalizado
+import { useProductos } from '../hooks/useProductos';
+
+/* --- DATOS DE EJEMPLO SIMULADOS (Ya no se usan en el estado principal) ---
+   const initialInventoryData = [
+       { id: 'P-001', name: 'Garrafón 20L', stock: 25, price: 500.00, lastUpdate: '25/09/2025' },
+       // ... otros productos
+   ]; 
+*/
 
 const ProductModal = ({ isOpen, onClose, onSave, product }) => {
+    // Asegúrate de que los campos coincidan con lo que tu DB espera (ej: name, stock, price)
     const [formData, setFormData] = useState({ name: '', stock: '', price: '' });
-    const isEditing = product !== null;
+    const isEditing = product && product.id; // Verifica que haya un producto con ID para editar
 
     useEffect(() => {
         if (isEditing) {
-            setFormData({ name: product.name, stock: product.stock, price: product.price });
+            // Nota: Aquí asumo que la estructura de tu producto de la DB es { id, nombre, stock, precio }
+            // Si la DB usa 'nombre' en lugar de 'name', ajusta aquí:
+            setFormData({
+                name: product.name || product.nombre || '',
+                stock: product.stock,
+                price: product.price
+            });
         } else {
             setFormData({ name: '', stock: '', price: '' });
         }
@@ -30,7 +39,17 @@ const ProductModal = ({ isOpen, onClose, onSave, product }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSave({ ...product, ...formData, stock: parseInt(formData.stock), price: parseFloat(formData.price) });
+
+        // Prepara los datos para la DB (usa 'nombre' si la DB lo espera)
+        const dataToSave = {
+            // Si el nombre en el modal es 'name' pero la DB espera 'nombre', haz la conversión
+            nombre: formData.name,
+            stock: parseInt(formData.stock),
+            precio: parseFloat(formData.price).toFixed(2) // Asegura formato de precio
+        };
+
+        // Llama a onSave con el ID si es edición, y los datos.
+        onSave(isEditing ? product.id : null, dataToSave);
         onClose();
     };
 
@@ -49,6 +68,7 @@ const ProductModal = ({ isOpen, onClose, onSave, product }) => {
                     <div className="flex gap-4">
                         <div className="w-1/2">
                             <label htmlFor="stock" className="block text-sm font-medium text-blue-300 mb-1">Stock Actual</label>
+                            {/* Usa type="number" pero maneja como string en state si necesitas input exacto */}
                             <input type="number" name="stock" value={formData.stock} onChange={handleChange} required className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white" />
                         </div>
                         <div className="w-1/2">
@@ -67,54 +87,94 @@ const ProductModal = ({ isOpen, onClose, onSave, product }) => {
 };
 
 export default function App() {
-const [products, setProducts] = useState(initialInventoryData); 
-const [searchTerm, setSearchTerm] = useState('');
-const [isModalOpen, setIsModalOpen] = useState(false);
-const [editingProduct, setEditingProduct] = useState(null);
+    // Estados locales para la UI
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingProduct, setEditingProduct] = useState(null);
 
-const filteredData = useMemo(() => {
-    return products.filter(item =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.id.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-}, [searchTerm, products]);
+    // USANDO EL HOOK PERSONALIZADO
+    const {
+        productos, // Ahora contiene la data real de la DB
+        loading,
+        error,
+        addProducto,
+        updateProducto,
+        deleteProducto
+    } = useProductos();
 
-const handleOpenModal = (product = null) => {
-    setEditingProduct(product);
-    setIsModalOpen(true);
-};
+    // Filtra los productos de la DB
+    const filteredData = useMemo(() => {
+        if (!productos || loading) return [];
+        return productos.filter(item =>
+            item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || // Asumiendo que el campo de la DB es 'nombre'
+            item.id.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [searchTerm, productos, loading]); // Depende de la lista de productos real
 
-const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingProduct(null);
-};
+    const handleOpenModal = (product = null) => {
+        setEditingProduct(product);
+        setIsModalOpen(true);
+    };
 
-const handleSaveProduct = (productData) => {
-    if (editingProduct) {
-        setProducts(products.map(p => p.id === editingProduct.id ? { ...p, ...productData } : p));
-    } else {
-        const newProduct = {
-            ...productData,
-            id: `P-${Date.now().toString().slice(-4)}`,
-            lastUpdate: new Date().toLocaleDateString('es-ES')
-        };
-        setProducts([newProduct, ...products]);
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setEditingProduct(null);
+    };
+
+    const handleSaveProduct = async (productId, productData) => {
+        try {
+            if (productId) {
+                // Actualizar producto
+                await updateProducto(productId, productData);
+            } else {
+                // Agregar nuevo producto
+                await addProducto({
+                    ...productData,
+                    // Puedes añadir campos por defecto para la DB aquí si son necesarios (ej: 'categoría')
+                    categoria: 'General'
+                });
+            }
+        } catch (e) {
+            console.error("Error al guardar producto:", e);
+            alert(`Error al guardar: ${e.message}`);
+        }
+        // El hook recarga la lista automáticamente.
+    };
+
+    const handleDeleteProduct = async (productId) => {
+        if (window.confirm('¿Estás seguro de que quieres archivar/eliminar este producto?')) {
+            try {
+                await deleteProducto(productId);
+                // El hook se encarga de actualizar el estado de 'productos'
+            } catch (e) {
+                console.error("Error al eliminar producto:", e);
+                alert(`Error al eliminar: ${e.message}`);
+            }
+        }
+    };
+
+
+    if (loading) {
+        return (
+            <div className="p-8 bg-gray-900 min-h-screen flex justify-center items-center">
+                <div className="text-xl text-blue-400">Cargando inventario...</div>
+            </div>
+        );
     }
-};
 
-const handleDeleteProduct = (productId) => {
-    if (window.confirm('¿Estás seguro de que quieres archivar este producto?')) {
-        setProducts(products.filter(p => p.id !== productId));
+    if (error) {
+        return (
+            <div className="p-8 bg-gray-900 min-h-screen flex justify-center items-center">
+                <div className="text-xl text-red-500">Error al cargar: {error}</div>
+            </div>
+        );
     }
-};
 
 
     return (
-        // Contenedor principal con tema oscuro y padding responsivo
         <div className="p-4 sm:p-8 bg-gray-900 min-h-screen font-sans">
             <header className="flex justify-between items-center mb-6 border-b border-blue-700/50 pb-4">
                 <div className="flex items-center gap-4">
-                    {/* Icono de inventario (Stock/Caja) */}
                     <svg className="h-10 w-10 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 16H5V8h14v10zm-6-8h-2v4h2v-4zM7 6h10v2H7V6z" />
                     </svg>
@@ -137,10 +197,10 @@ const handleDeleteProduct = (productId) => {
                 <div className="flex gap-2 w-full md:w-auto">
                     <button
                         onClick={() => handleOpenModal()}
-                        className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95"
+                        className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-blue-600/80 hover:bg-blue-700 transition-colors shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2"
                     >
                         <Plus size={18} />
-                        Nuevo 
+                        Nuevo
                     </button>
                 </div>
             </div>
@@ -175,30 +235,34 @@ const handleDeleteProduct = (productId) => {
                                     className={`border-b border-gray-700 ${rowClass} hover:!bg-gray-700 transition-colors`}
                                 >
                                     <td className="p-4 text-sm font-mono text-gray-400">{product.id}</td>
-                                    <td className="p-4 text-sm font-medium text-gray-100">{product.name}</td>
+                                    {/* Asumo que el nombre viene como 'nombre' de la DB */}
+                                    <td className="p-4 text-sm font-medium text-gray-100">{product.nombre}</td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${stockBadgeClasses}`}>
                                             {product.stock} Unidades
                                         </span>
                                     </td>
-                                    <td className="p-4 text-sm font-medium text-green-400">${product.price.toFixed(2)}</td>
+                                    {/* Asumo que el precio viene como 'precio' de la DB */}
+                                    <td className="p-4 text-sm font-medium text-green-400">${parseFloat(product.precio).toFixed(2)}</td>
                                     <td className="p-4">
                                         <div className="flex gap-3">
                                             <button
-                                                onClick={() => handleOpenModal(product)}
-                                                className="relative inline-block p-px font-semibold leading-6 text-blue-500 
-                                                hover:text-blue-300 bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 
-                                                transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 hover:ring-2 hover:ring-blue-500"
-                                                title="Editar Producto (Placeholder)"
+                                                // Prepara el objeto para la edición. Ajusta las keys si es necesario.
+                                                onClick={() => handleOpenModal({
+                                                    id: product.id,
+                                                    name: product.nombre, // Usa 'name' para el modal
+                                                    stock: product.stock,
+                                                    price: product.precio
+                                                })}
+                                                className="inline-block p-1 text-blue-500 hover:text-blue-300 transition-transform duration-300 hover:scale-110"
+                                                title="Editar Producto"
                                             >
                                                 <Edit size={18} />
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteProduct(product.id)}
-                                                className="relative inline-block p-px font-semibold leading-6 text-red-500 
-                                                hover:text-red-300 bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 
-                                                transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 hover:ring-2 hover:ring-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-0"
-                                                title="Archivar/Eliminar (Placeholder)"
+                                                className="inline-block p-1 text-red-500 hover:text-red-300 transition-transform duration-300 hover:scale-110"
+                                                title="Archivar/Eliminar"
                                             >
                                                 <Archive size={18} />
                                             </button>
@@ -209,18 +273,18 @@ const handleDeleteProduct = (productId) => {
                         })}
                     </tbody>
                 </table>
-                {filteredData.length === 0 && (
+                {filteredData.length === 0 && !loading && (
                     <div className="p-6 text-center text-gray-400">
-                        No se encontraron productos que coincidan con la búsqueda.
+                        {productos.length === 0 ? 'No hay productos en el inventario.' : 'No se encontraron productos que coincidan con la búsqueda.'}
                     </div>
-                )}  
+                )}
             </div>
-            <ProductModal 
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSave={handleSaveProduct}
-        product={editingProduct}
-      />
+            <ProductModal
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                onSave={handleSaveProduct}
+                product={editingProduct}
+            />
         </div>
     );
 }
