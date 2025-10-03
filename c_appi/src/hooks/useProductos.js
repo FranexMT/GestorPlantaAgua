@@ -4,7 +4,7 @@ import {
   getProducto,
   onSubmitProducto,
   updateProducto,
-  //deleteProducto
+  deleteProducto
 } from '../conexiones/crudInventario';
 
 export const useProductos = () => {
@@ -42,7 +42,17 @@ export const useProductos = () => {
     fetchProductos();
   }, []);
 
-  
+  // Eliminar producto (useProducto)
+  const handleDeleteProducto = async (id) => {
+    try {
+      setError(null);
+      await deleteProducto(id);
+      setProductos(prev => prev.filter(prod => prod.id !== id));
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
 
   // Actualizar producto
   const handleUpdateProducto = async (id, datosActualizados) => {
@@ -64,7 +74,7 @@ export const useProductos = () => {
     error,
     addProducto: handleAddProducto,
     updateProducto: handleUpdateProducto,
-    //deleteProducto: handleDeleteProducto,
+    deleteProducto: handleDeleteProducto,
     refetchProductos: fetchProductos
   };
 };
