@@ -2,9 +2,9 @@
 import { useState, useEffect } from 'react';
 import {
   getProducto,
-  onSubmitProducto,
+  //onSubmitProducto,
   updateProducto,
-  deleteProducto
+  //deleteProducto
 } from '../conexiones/crudInventario';
 
 export const useProductos = () => {
@@ -12,7 +12,24 @@ export const useProductos = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  
+  // Cargar productos
+  const fetchProductos = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getProducto();
+      setProductos(data || []);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error al cargar productos:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProductos();
+  }, []);
 
   
 
@@ -34,9 +51,9 @@ export const useProductos = () => {
     productos,
     loading,
     error,
-    addProducto: handleAddProducto,
+    //addProducto: handleAddProducto,
     updateProducto: handleUpdateProducto,
-    deleteProducto: handleDeleteProducto,
+    //deleteProducto: handleDeleteProducto,
     refetchProductos: fetchProductos
   };
 };
