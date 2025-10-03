@@ -3,7 +3,7 @@ import {
   getDocs,
   collection,
   addDoc,
-  //deleteDoc,
+  deleteDoc,
   updateDoc,
   doc
 } from 'firebase/firestore';
@@ -22,6 +22,18 @@ export const getProducto = async () => {
     return dataFilter; // Retornar los datos
   } catch (err) {
     console.error('Error al obtener productos:', err);
+    throw err;
+  }
+};
+
+// Eliminar un producto (crudInventario)
+export const deleteProducto = async (id) => {
+  try {
+    const productoDoc = doc(db, "productos", id);
+    await deleteDoc(productoDoc);
+    console.log('Producto eliminado correctamente:', id);
+  } catch (err) {
+    console.error('Error al eliminar producto:', err);
     throw err;
   }
 };
