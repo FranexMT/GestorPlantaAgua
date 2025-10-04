@@ -1,32 +1,30 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Search, Edit, Archive } from 'lucide-react';
-
-// Importa el hook personalizado
-import { useProductos } from '../hooks/useProductos';
-
-/* --- DATOS DE EJEMPLO SIMULADOS (Ya no se usan en el estado principal) ---
-   const initialInventoryData = [
-       { id: 'P-001', name: 'Garrafón 20L', stock: 25, price: 500.00, lastUpdate: '25/09/2025' },
-       // ... otros productos
-   ]; 
-*/
+import { useProductos } from '../hooks/useProductos'; // Asegúrate de que la ruta sea correcta
+import { toast } from 'react-toastify';
 
 const ProductModal = ({ isOpen, onClose, onSave, product }) => {
-    // Asegúrate de que los campos coincidan con lo que tu DB espera (ej: name, stock, price)
-    const [formData, setFormData] = useState({ name: '', stock: '', price: '' });
-    const isEditing = product && product.id; // Verifica que haya un producto con ID para editar
+    const [formData, setFormData] = useState({ name: '', stock: '', price: '', categoria: '' });
+    const isEditing = product && product.id;
+
+    // Lista de categorías para el dropdown
+    const categorias = ["Hielito", "Hielo", "Agua", "Zuko", "Garrafon"];
+
+    const notify = () => {
+        toast(isEditing ? 'Producto editado con éxito!' : 'Producto guardado con éxito!', { type: 'success' });
+    };
 
     useEffect(() => {
         if (isEditing) {
-            // Nota: Aquí asumo que la estructura de tu producto de la DB es { id, nombre, stock, precio }
-            // Si la DB usa 'nombre' en lugar de 'name', ajusta aquí:
             setFormData({
                 name: product.name || product.nombre || '',
                 stock: product.stock,
-                price: product.price
+                price: product.price,
+                categoria: product.categoria || ''
             });
         } else {
-            setFormData({ name: '', stock: '', price: '' });
+            // Limpia el formulario completo para un nuevo producto
+            setFormData({ name: '', stock: '', price: '', categoria: '' });
         }
     }, [product, isEditing]);
 
@@ -39,17 +37,14 @@ const ProductModal = ({ isOpen, onClose, onSave, product }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-
-        // Prepara los datos para la DB (usa 'nombre' si la DB lo espera)
         const dataToSave = {
-            // Si el nombre en el modal es 'name' pero la DB espera 'nombre', haz la conversión
             nombre: formData.name,
             stock: parseInt(formData.stock),
-            precio: parseFloat(formData.price).toFixed(2) // Asegura formato de precio
+            precio: parseFloat(formData.price).toFixed(2),
+            categoria: formData.categoria
         };
-
-        // Llama a onSave con el ID si es edición, y los datos.
         onSave(isEditing ? product.id : null, dataToSave);
+        notify();
         onClose();
     };
 
@@ -58,17 +53,34 @@ const ProductModal = ({ isOpen, onClose, onSave, product }) => {
             <div className="bg-gray-800 rounded-xl shadow-2xl border border-blue-700/30 w-full max-w-md m-4">
                 <div className="flex justify-between items-center p-4 border-b border-gray-700">
                     <h2 className="text-xl font-bold text-gray-100">{isEditing ? 'Editar Producto' : 'Agregar Nuevo Producto'}</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">✕</button>
+                    <button onClick={onClose} className="text-gray-400 bg-[#1a1a1a] hover:text-white transition-colors">✕</button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div>
                         <label htmlFor="name" className="block text-sm font-medium text-blue-300 mb-1">Nombre del Producto</label>
                         <input type="text" name="name" value={formData.name} onChange={handleChange} required className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white" />
                     </div>
+
+                    <div>
+                        <label htmlFor="categoria" className="block text-sm font-medium text-blue-300 mb-1">Categoría</label>
+                        <select
+                            name="categoria"
+                            id="categoria"
+                            value={formData.categoria}
+                            onChange={handleChange}
+                            required
+                            className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white appearance-none"
+                        >
+                            <option value="" disabled>Selecciona una categoría</option>
+                            {categorias.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="flex gap-4">
                         <div className="w-1/2">
                             <label htmlFor="stock" className="block text-sm font-medium text-blue-300 mb-1">Stock Actual</label>
-                            {/* Usa type="number" pero maneja como string en state si necesitas input exacto */}
                             <input type="number" name="stock" value={formData.stock} onChange={handleChange} required className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white" />
                         </div>
                         <div className="w-1/2">
@@ -77,8 +89,8 @@ const ProductModal = ({ isOpen, onClose, onSave, product }) => {
                         </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-4">
-                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-white rounded-lg">Cancelar</button>
-                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">{isEditing ? 'Guardar Cambios' : 'Agregar Producto'}</button>
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg">Cancelar</button>
+                        <button type="submit" className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg font-semibold">{isEditing ? 'Guardar Cambios' : 'Agregar Producto'}</button>
                     </div>
                 </form>
             </div>
@@ -86,15 +98,51 @@ const ProductModal = ({ isOpen, onClose, onSave, product }) => {
     );
 };
 
+
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50">
+            <div className="bg-gray-800/80 rounded-xl shadow-2xl border w-full max-w-sm m-4">
+                <div className="flex justify-between items-center p-4 border-b border-gray-700">
+                    <h2 className="text-xl font-bold text-white">{title}</h2>
+                    <button onClick={onClose} className="text-gray-400 bg-[#1a1a1a] hover:text-white transition-colors">✕</button>
+                </div>
+                <div className="p-6 text-gray-300">
+                    {children}
+                </div>
+                <div className="flex justify-end gap-3 p-4 bg-gray-900/50 rounded-b-xl">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                    >
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 export default function App() {
-    // Estados locales para la UI
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [productToDelete, setProductToDelete] = useState(null);
 
-    // USANDO EL HOOK PERSONALIZADO
     const {
-        productos, // Ahora contiene la data real de la DB
+        productos,
         loading,
         error,
         addProducto,
@@ -102,14 +150,13 @@ export default function App() {
         deleteProducto
     } = useProductos();
 
-    // Filtra los productos de la DB
     const filteredData = useMemo(() => {
         if (!productos || loading) return [];
         return productos.filter(item =>
-            item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || // Asumiendo que el campo de la DB es 'nombre'
-            item.id.toLowerCase().includes(searchTerm.toLowerCase())
+            item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.id.toString().toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [searchTerm, productos, loading]); // Depende de la lista de productos real
+    }, [searchTerm, productos, loading]);
 
     const handleOpenModal = (product = null) => {
         setEditingProduct(product);
@@ -124,35 +171,34 @@ export default function App() {
     const handleSaveProduct = async (productId, productData) => {
         try {
             if (productId) {
-                // Actualizar producto
                 await updateProducto(productId, productData);
             } else {
-                // Agregar nuevo producto
-                await addProducto({
-                    ...productData,
-                    // Puedes añadir campos por defecto para la DB aquí si son necesarios (ej: 'categoría')
-                    categoria: 'General'
-                });
+                await addProducto(productData);
             }
         } catch (e) {
             console.error("Error al guardar producto:", e);
-            alert(`Error al guardar: ${e.message}`);
-        }
-        // El hook recarga la lista automáticamente.
-    };
-
-    const handleDeleteProduct = async (productId) => {
-        if (window.confirm('¿Estás seguro de que quieres archivar/eliminar este producto?')) {
-            try {
-                await deleteProducto(productId);
-                // El hook se encarga de actualizar el estado de 'productos'
-            } catch (e) {
-                console.error("Error al eliminar producto:", e);
-                alert(`Error al eliminar: ${e.message}`);
-            }
+            toast(`Error al guardar: ${e.message}`, { type: 'error' });
         }
     };
 
+    const handleDeleteProduct = (productId) => {
+        setProductToDelete(productId);
+        setIsConfirmModalOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!productToDelete) return;
+        try {
+            await deleteProducto(productToDelete);
+            toast('Producto eliminado con éxito!', { type: 'success' });
+        } catch (e) {
+            console.error("Error al eliminar producto:", e);
+            toast(`Error al eliminar: ${e.message}`, { type: 'error' });
+        } finally {
+            setIsConfirmModalOpen(false);
+            setProductToDelete(null);
+        }
+    };
 
     if (loading) {
         return (
@@ -170,20 +216,18 @@ export default function App() {
         );
     }
 
-
     return (
         <div className="p-4 sm:p-8 bg-gray-900 min-h-screen font-sans">
             <header className="flex justify-between items-center mb-6 border-b border-blue-700/50 pb-4">
-                <div className="flex items-center gap-4">
-                    <svg className="h-10 w-10 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 16H5V8h14v10zm-6-8h-2v4h2v-4zM7 6h10v2H7V6z" />
+                <div className="flex items-baseline gap-2">
+                    <svg className="h-10 w-10 text-blue-400 relative top-px" viewBox="0 0 22 22" fill='currentColor'>
+                        <path d="M19 0H1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1ZM2 6v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6H2Zm11 3a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a1 1 0 0 1 2 0h2a1 1 0 0 1 2 0v1Z" />
                     </svg>
-                    <h1 className="text-3xl font-bold text-gray-100">Inventario Base</h1>
+                    <h1 className="text-3xl font-bold text-gray-100">Inventario</h1>
                 </div>
             </header>
 
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                {/* Barra de Búsqueda */}
                 <div className="relative w-full md:w-1/3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" size={20} />
                     <input
@@ -193,11 +237,10 @@ export default function App() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                {/* Botones de Acción */}
                 <div className="flex gap-2 w-full md:w-auto">
                     <button
                         onClick={() => handleOpenModal()}
-                        className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-blue-600/80 hover:bg-blue-700 transition-colors shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2"
+                        className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-blue-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2"
                     >
                         <Plus size={18} />
                         Nuevo
@@ -205,13 +248,13 @@ export default function App() {
                 </div>
             </div>
 
-            {/* Tabla de Inventario */}
             <div className="bg-gray-800/80 rounded-xl shadow-2xl border border-blue-700/30 overflow-x-auto">
                 <table className="w-full text-left text-gray-300">
                     <thead className="bg-gray-700/50 backdrop-blur-sm sticky top-0">
                         <tr>
                             <th className="p-4 font-semibold text-blue-400">ID Producto</th>
                             <th className="p-4 font-semibold text-blue-400">Nombre</th>
+                            <th className="p-4 font-semibold text-blue-400">Categoría</th>
                             <th className="p-4 font-semibold text-blue-400">Stock Actual</th>
                             <th className="p-4 font-semibold text-blue-400">Precio Venta</th>
                             <th className="p-4 font-semibold text-blue-400">Acción</th>
@@ -220,13 +263,11 @@ export default function App() {
                     <tbody>
                         {filteredData.map((product, index) => {
                             const rowClass = index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-700/50';
-
-                            let stockBadgeClasses = 'bg-green-700/30 text-green-300'; // Suficiente stock
-
+                            let stockBadgeClasses = 'bg-green-700/30 text-green-300';
                             if (product.stock < 10) {
-                                stockBadgeClasses = 'bg-red-700/30 text-red-300'; // Muy bajo
+                                stockBadgeClasses = 'bg-red-700/30 text-red-300';
                             } else if (product.stock < 20) {
-                                stockBadgeClasses = 'bg-yellow-700/30 text-yellow-300'; // Advertencia
+                                stockBadgeClasses = 'bg-yellow-700/30 text-yellow-300';
                             }
 
                             return (
@@ -235,33 +276,32 @@ export default function App() {
                                     className={`border-b border-gray-700 ${rowClass} hover:!bg-gray-700 transition-colors`}
                                 >
                                     <td className="p-4 text-sm font-mono text-gray-400">{product.id}</td>
-                                    {/* Asumo que el nombre viene como 'nombre' de la DB */}
                                     <td className="p-4 text-sm font-medium text-gray-100">{product.nombre}</td>
+                                    <td className="p-4 text-sm text-gray-400">{product.categoria}</td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${stockBadgeClasses}`}>
                                             {product.stock} Unidades
                                         </span>
                                     </td>
-                                    {/* Asumo que el precio viene como 'precio' de la DB */}
                                     <td className="p-4 text-sm font-medium text-green-400">${parseFloat(product.precio).toFixed(2)}</td>
                                     <td className="p-4">
                                         <div className="flex gap-3">
                                             <button
-                                                // Prepara el objeto para la edición. Ajusta las keys si es necesario.
                                                 onClick={() => handleOpenModal({
                                                     id: product.id,
-                                                    name: product.nombre, // Usa 'name' para el modal
+                                                    name: product.nombre,
                                                     stock: product.stock,
-                                                    price: product.precio
+                                                    price: product.precio,
+                                                    categoria: product.categoria
                                                 })}
-                                                className="inline-block p-1 text-blue-500 hover:text-blue-300 transition-transform duration-300 hover:scale-110"
+                                                className="inline-block p-1 text-blue-500 bg-[#1a1a1a] hover:text-blue-300 transition-transform duration-300 focus:outline-none hover:scale-110 hover:ring-2 hover:ring-blue-500 focus:ring-2 focus:ring-blue-500 rounded-md"
                                                 title="Editar Producto"
                                             >
                                                 <Edit size={18} />
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteProduct(product.id)}
-                                                className="inline-block p-1 text-red-500 hover:text-red-300 transition-transform duration-300 hover:scale-110"
+                                                className="inline-block p-1 text-red-500 bg-[#1a1a1a] hover:text-red-300 transition-transform duration-300 focus:outline-none hover:scale-110 hover:ring-2 hover:ring-red-500 focus:ring-2 focus:ring-red-500 rounded-md"
                                                 title="Archivar/Eliminar"
                                             >
                                                 <Archive size={18} />
@@ -279,12 +319,22 @@ export default function App() {
                     </div>
                 )}
             </div>
+
             <ProductModal
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
                 onSave={handleSaveProduct}
                 product={editingProduct}
             />
+
+            <ConfirmModal
+                isOpen={isConfirmModalOpen}
+                onClose={() => setIsConfirmModalOpen(false)}
+                onConfirm={handleConfirmDelete}
+                title="Confirmar Eliminación"
+            >
+                <p className='text-white'>¿Estás seguro de que quieres archivar/eliminar este producto?</p>
+            </ConfirmModal>
         </div>
     );
 }
