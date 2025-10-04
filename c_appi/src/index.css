@@ -41,9 +41,16 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
   cursor: pointer;
   transition: border-color 0.25s;
+}
+
+
+.custom-toast {
+  background: #1e293b !important;      
+  color: #dbeafe !important;           
+  box-shadow: 0 4px 24px 0 #60a5fa99;  
+  border: 1px solid #60a5fa;      
 }
 
 button:focus,

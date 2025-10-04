@@ -1,54 +1,233 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Download, Search, Edit, Eye, Archive } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, Search, Edit, Archive } from 'lucide-react';
+import { useProductos } from '../hooks/useProductos'; // Asegúrate de que la ruta sea correcta
+import { toast } from 'react-toastify';
 
-// --- DATOS DE EJEMPLO SIMULADOS (Para que la tabla se vea llena) ---
-const mockInventoryData = [
+const ProductModal = ({ isOpen, onClose, onSave, product }) => {
+    const [formData, setFormData] = useState({ name: '', stock: '', price: '', categoria: '' });
+    const isEditing = product && product.id;
 
-    { id: 'P-001', name: 'Garrafón 20L', stock: 25, price: 500.00, lastUpdate: '25/09/2025' },
-    { id: 'P-002', name: 'Botella PET 1L', stock: 30, price: 300.00, lastUpdate: '25/09/2025' },
-    { id: 'P-003', name: 'Pack 6 PET 500mls', stock: 10, price: 990.00, lastUpdate: '24/09/2025' },
-    { id: 'P-005', name: 'Botella PET 500ml', stock: 5, price: 150.00, lastUpdate: '25/09/2025' }, // Bajo stock
+    // Lista de categorías para el dropdown
+    const categorias = ["Hielito", "Hielo", "Agua", "Zuko", "Garrafon"];
 
-    { id: 'P-001', name: 'Garrafón 20L', stock: 150, price: 500.00, lastUpdate: '25/09/2025' },
-    { id: 'P-002', name: 'Botella PET 1L', stock: 5, price: 300.00, lastUpdate: '25/09/2025' },
-    { id: 'P-003', name: 'Pack 6 PET 500mls', stock: 80, price: 990.00, lastUpdate: '24/09/2025' },
-    { id: 'P-005', name: 'Botella PET 500ml', stock: 10, price: 150.00, lastUpdate: '25/09/2025' }, // Bajo stock
-    { id: 'P-001', name: 'Garrafón 20L', stock: 75, price: 500.00, lastUpdate: '25/09/2025' },
-];
+    const notify = () => {
+        toast(isEditing ? 'Producto editado con éxito!' : 'Producto guardado con éxito!', { type: 'success' });
+    };
 
-export default function App() {
-    // 1. Estado para la búsqueda
-    const [searchTerm, setSearchTerm] = useState('');
+    useEffect(() => {
+        if (isEditing) {
+            setFormData({
+                name: product.name || product.nombre || '',
+                stock: product.stock,
+                price: product.price,
+                categoria: product.categoria || ''
+            });
+        } else {
+            // Limpia el formulario completo para un nuevo producto
+            setFormData({ name: '', stock: '', price: '', categoria: '' });
+        }
+    }, [product, isEditing]);
 
-    // 2. Lógica de filtrado de datos 
-    const filteredData = useMemo(() => {
-        return mockInventoryData.filter(item =>
-            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.id.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [searchTerm]);
+    if (!isOpen) return null;
 
-    // 3. Función placeholder para acciones
-    const handleActionPlaceholder = (action, id) => {
-        console.log(`[MAQUETA - ACCIÓN] Se intentó realizar la acción: ${action} en el producto: ${id}`);
-        // Aquí iría la lógica real (ej: abrir modal, llamar a la BD, etc.)
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        const dataToSave = {
+            nombre: formData.name,
+            stock: parseInt(formData.stock),
+            precio: parseFloat(formData.price).toFixed(2),
+            categoria: formData.categoria
+        };
+        onSave(isEditing ? product.id : null, dataToSave);
+        notify();
+        onClose();
     };
 
     return (
-        // Contenedor principal con tema oscuro y padding responsivo
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50">
+            <div className="bg-gray-800 rounded-xl shadow-2xl border border-blue-700/30 w-full max-w-md m-4">
+                <div className="flex justify-between items-center p-4 border-b border-gray-700">
+                    <h2 className="text-xl font-bold text-gray-100">{isEditing ? 'Editar Producto' : 'Agregar Nuevo Producto'}</h2>
+                    <button onClick={onClose} className="text-gray-400 bg-[#1a1a1a] hover:text-white transition-colors">✕</button>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div>
+                        <label htmlFor="name" className="block text-sm font-medium text-blue-300 mb-1">Nombre del Producto</label>
+                        <input type="text" name="name" value={formData.name} onChange={handleChange} required className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                    </div>
+
+                    <div>
+                        <label htmlFor="categoria" className="block text-sm font-medium text-blue-300 mb-1">Categoría</label>
+                        <select
+                            name="categoria"
+                            id="categoria"
+                            value={formData.categoria}
+                            onChange={handleChange}
+                            required
+                            className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white appearance-none"
+                        >
+                            <option value="" disabled>Selecciona una categoría</option>
+                            {categorias.map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex gap-4">
+                        <div className="w-1/2">
+                            <label htmlFor="stock" className="block text-sm font-medium text-blue-300 mb-1">Stock Actual</label>
+                            <input type="number" name="stock" value={formData.stock} onChange={handleChange} required className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                        </div>
+                        <div className="w-1/2">
+                            <label htmlFor="price" className="block text-sm font-medium text-blue-300 mb-1">Precio de Venta</label>
+                            <input type="number" step="0.01" name="price" value={formData.price} onChange={handleChange} required className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white" />
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg">Cancelar</button>
+                        <button type="submit" className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg font-semibold">{isEditing ? 'Guardar Cambios' : 'Agregar Producto'}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50">
+            <div className="bg-gray-800/80 rounded-xl shadow-2xl border w-full max-w-sm m-4">
+                <div className="flex justify-between items-center p-4 border-b border-gray-700">
+                    <h2 className="text-xl font-bold text-white">{title}</h2>
+                    <button onClick={onClose} className="text-gray-400 bg-[#1a1a1a] hover:text-white transition-colors">✕</button>
+                </div>
+                <div className="p-6 text-gray-300">
+                    {children}
+                </div>
+                <div className="flex justify-end gap-3 p-4 bg-gray-900/50 rounded-b-xl">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 bg-[#1a1a1a] text-white rounded-lg hover:bg-gray-500 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                    >
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+export default function App() {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [productToDelete, setProductToDelete] = useState(null);
+
+    const {
+        productos,
+        loading,
+        error,
+        addProducto,
+        updateProducto,
+        deleteProducto
+    } = useProductos();
+
+    const filteredData = useMemo(() => {
+        if (!productos || loading) return [];
+        return productos.filter(item =>
+            item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.id.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [searchTerm, productos, loading]);
+
+    const handleOpenModal = (product = null) => {
+        setEditingProduct(product);
+        setIsModalOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setEditingProduct(null);
+    };
+
+    const handleSaveProduct = async (productId, productData) => {
+        try {
+            if (productId) {
+                await updateProducto(productId, productData);
+            } else {
+                await addProducto(productData);
+            }
+        } catch (e) {
+            console.error("Error al guardar producto:", e);
+            toast(`Error al guardar: ${e.message}`, { type: 'error' });
+        }
+    };
+
+    const handleDeleteProduct = (productId) => {
+        setProductToDelete(productId);
+        setIsConfirmModalOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!productToDelete) return;
+        try {
+            await deleteProducto(productToDelete);
+            toast('Producto eliminado con éxito!', { type: 'success' });
+        } catch (e) {
+            console.error("Error al eliminar producto:", e);
+            toast(`Error al eliminar: ${e.message}`, { type: 'error' });
+        } finally {
+            setIsConfirmModalOpen(false);
+            setProductToDelete(null);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="p-8 bg-gray-900 min-h-screen flex justify-center items-center">
+                <div className="text-xl text-blue-400">Cargando inventario...</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="p-8 bg-gray-900 min-h-screen flex justify-center items-center">
+                <div className="text-xl text-red-500">Error al cargar: {error}</div>
+            </div>
+        );
+    }
+
+    return (
         <div className="p-4 sm:p-8 bg-gray-900 min-h-screen font-sans">
             <header className="flex justify-between items-center mb-6 border-b border-blue-700/50 pb-4">
-                <div className="flex items-center gap-4">
-                    {/* Icono de inventario (Stock/Caja) */}
-                    <svg className="h-10 w-10 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 16H5V8h14v10zm-6-8h-2v4h2v-4zM7 6h10v2H7V6z" />
+                <div className="flex items-baseline gap-2">
+                    <svg className="h-10 w-10 text-blue-400 relative top-px" viewBox="0 0 22 22" fill='currentColor'>
+                        <path d="M19 0H1a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1ZM2 6v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6H2Zm11 3a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a1 1 0 0 1 2 0h2a1 1 0 0 1 2 0v1Z" />
                     </svg>
-                    <h1 className="text-3xl font-bold text-gray-100">Inventario Base</h1>
+                    <h1 className="text-3xl font-bold text-gray-100">Inventario</h1>
                 </div>
             </header>
 
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                {/* Barra de Búsqueda */}
                 <div className="relative w-full md:w-1/3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" size={20} />
                     <input
@@ -58,25 +237,24 @@ export default function App() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                {/* Botones de Acción */}
                 <div className="flex gap-2 w-full md:w-auto">
                     <button
-                        onClick={() => handleActionPlaceholder('Crear Nuevo', 'N/A')}
-                        className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95"
+                        onClick={() => handleOpenModal()}
+                        className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-blue-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2"
                     >
                         <Plus size={18} />
-                        Nuevo Producto
+                        Nuevo
                     </button>
                 </div>
             </div>
 
-            {/* Tabla de Inventario */}
             <div className="bg-gray-800/80 rounded-xl shadow-2xl border border-blue-700/30 overflow-x-auto">
                 <table className="w-full text-left text-gray-300">
                     <thead className="bg-gray-700/50 backdrop-blur-sm sticky top-0">
                         <tr>
                             <th className="p-4 font-semibold text-blue-400">ID Producto</th>
                             <th className="p-4 font-semibold text-blue-400">Nombre</th>
+                            <th className="p-4 font-semibold text-blue-400">Categoría</th>
                             <th className="p-4 font-semibold text-blue-400">Stock Actual</th>
                             <th className="p-4 font-semibold text-blue-400">Precio Venta</th>
                             <th className="p-4 font-semibold text-blue-400">Acción</th>
@@ -85,13 +263,11 @@ export default function App() {
                     <tbody>
                         {filteredData.map((product, index) => {
                             const rowClass = index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-700/50';
-
-                            let stockBadgeClasses = 'bg-green-700/30 text-green-300'; // Suficiente stock
-
+                            let stockBadgeClasses = 'bg-green-700/30 text-green-300';
                             if (product.stock < 10) {
-                                stockBadgeClasses = 'bg-red-700/30 text-red-300'; // Muy bajo
+                                stockBadgeClasses = 'bg-red-700/30 text-red-300';
                             } else if (product.stock < 20) {
-                                stockBadgeClasses = 'bg-yellow-700/30 text-yellow-300'; // Advertencia
+                                stockBadgeClasses = 'bg-yellow-700/30 text-yellow-300';
                             }
 
                             return (
@@ -100,31 +276,32 @@ export default function App() {
                                     className={`border-b border-gray-700 ${rowClass} hover:!bg-gray-700 transition-colors`}
                                 >
                                     <td className="p-4 text-sm font-mono text-gray-400">{product.id}</td>
-                                    <td className="p-4 text-sm font-medium text-gray-100">{product.name}</td>
+                                    <td className="p-4 text-sm font-medium text-gray-100">{product.nombre}</td>
+                                    <td className="p-4 text-sm text-gray-400">{product.categoria}</td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${stockBadgeClasses}`}>
                                             {product.stock} Unidades
                                         </span>
                                     </td>
-                                    <td className="p-4 text-sm font-medium text-green-400">${product.price.toFixed(2)}</td>
+                                    <td className="p-4 text-sm font-medium text-green-400">${parseFloat(product.precio).toFixed(2)}</td>
                                     <td className="p-4">
                                         <div className="flex gap-3">
                                             <button
-                                                onClick={() => handleActionPlaceholder('Editar', product.id)}
-
-                                                className="relative inline-block p-px font-semibold leading-6 text-blue-500 
-                                                hover:text-blue-300 bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 
-                                                transition-transform duration-300 ease-in-out hover:scale-115 active:scale-95 hover:ring-2 hover:ring-blue-500"
+                                                onClick={() => handleOpenModal({
+                                                    id: product.id,
+                                                    name: product.nombre,
+                                                    stock: product.stock,
+                                                    price: product.precio,
+                                                    categoria: product.categoria
+                                                })}
+                                                className="inline-block p-1 text-blue-500 bg-[#1a1a1a] hover:text-blue-300 transition-transform duration-300 focus:outline-none hover:scale-110 hover:ring-2 hover:ring-blue-500 focus:ring-2 focus:ring-blue-500 rounded-md"
                                                 title="Editar Producto"
                                             >
                                                 <Edit size={18} />
                                             </button>
                                             <button
-                                                onClick={() => handleActionPlaceholder('Archivar', product.id)}
-
-                                                className="relative inline-block p-px font-semibold leading-6 text-red-500 
-                                                hover:text-red-300 bg-gray-800 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 
-                                                transition-transform duration-300 ease-in-out hover:scale-115 active:scale-95 hover:ring-2 hover:ring-red-500"
+                                                onClick={() => handleDeleteProduct(product.id)}
+                                                className="inline-block p-1 text-red-500 bg-[#1a1a1a] hover:text-red-300 transition-transform duration-300 focus:outline-none hover:scale-110 hover:ring-2 hover:ring-red-500 focus:ring-2 focus:ring-red-500 rounded-md"
                                                 title="Archivar/Eliminar"
                                             >
                                                 <Archive size={18} />
@@ -136,12 +313,28 @@ export default function App() {
                         })}
                     </tbody>
                 </table>
-                {filteredData.length === 0 && (
+                {filteredData.length === 0 && !loading && (
                     <div className="p-6 text-center text-gray-400">
-                        No se encontraron productos que coincidan con la búsqueda.
+                        {productos.length === 0 ? 'No hay productos en el inventario.' : 'No se encontraron productos que coincidan con la búsqueda.'}
                     </div>
                 )}
             </div>
+
+            <ProductModal
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                onSave={handleSaveProduct}
+                product={editingProduct}
+            />
+
+            <ConfirmModal
+                isOpen={isConfirmModalOpen}
+                onClose={() => setIsConfirmModalOpen(false)}
+                onConfirm={handleConfirmDelete}
+                title="Confirmar Eliminación"
+            >
+                <p className='text-white'>¿Estás seguro de que quieres archivar/eliminar este producto?</p>
+            </ConfirmModal>
         </div>
     );
 }
