@@ -1,12 +1,27 @@
 import React, { useState } from "react";
 import InventoryScreen from './screens/InventoryScreen';
 import SalesScreen from './screens/SalesScreen';
+import "react-toastify/dist/ReactToastify.css";
+import { ToastContainer } from 'react-toastify';
+
 function App() {
   const [activeScreen, setActiveScreen] = useState('inventory'); // 'inventory' o 'sales'
 
   return (
     <div>
-      {/* Navbar simple para cambiar de pantalla */}
+      <ToastContainer
+        position="top-right"
+        autoClose={1500}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark-blue"
+        toastClassName="custom-toast"
+      />
       <nav className="bg-gray-900 shadow-md">
         <div className="max-w-7xl mx-auto px-8">
           <div className="flex items-center justify-center h-16">
