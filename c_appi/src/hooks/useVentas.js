@@ -3,7 +3,7 @@ import {
   getVentas,
   createVenta,
   updateVenta,
-  //deleteVenta
+  deleteVenta
 } from '../conexiones/ventas.js';
 
 export const useVentas = () => {
@@ -57,6 +57,19 @@ const handleAddVenta = async (ventaData) => {
       throw err;
     }
   };
+
+  // Eliminar venta
+    const handleDeleteVenta = async (ventaId) => {
+    try {
+      setError(null);
+      await deleteVenta(ventaId);
+      setVentas(prevVentas => prevVentas.filter(venta => venta.id !== ventaId));
+    } catch (err) {
+      setError(err.message);
+      console.error('Error al eliminar venta:', err);
+      throw err;
+    }
+  };
   
   // Cargar ventas al montar el componente
   useEffect(() => {
@@ -69,7 +82,7 @@ const handleAddVenta = async (ventaData) => {
     error,
     addVenta: handleAddVenta,
     updateVenta: handleUpdateVenta,
-    //deleteVenta: handleDeleteVenta,
+    deleteVenta: handleDeleteVenta,
     refetchVentas: fetchVentas
   };
 };

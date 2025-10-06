@@ -3,7 +3,7 @@ import {
   getDocs,
   collection,
   addDoc,
-  //deleteDoc,
+  deleteDoc,
   updateDoc,
   doc,
   serverTimestamp
@@ -48,6 +48,18 @@ export const createVenta = async (ventaData) => {
     throw new Error('No se pudo crear la venta. Intenta de nuevo.');
   }
 };
+// Eliminar una venta
+export const deleteVenta = async (ventaId) => {
+  try {
+    const ventaRef = doc(db, "ventas", ventaId);
+    await deleteDoc(ventaRef);
+    console.log('Venta eliminada:', ventaId);
+    return ventaId;
+  } catch (err) {
+    console.error('Error al eliminar venta:', err);
+    throw new Error('No se pudo eliminar la venta. Intenta de nuevo.');
+  }
+};
 
 // Actualizar una venta existente
 export const updateVenta = async (ventaId, ventaData) => {
@@ -69,5 +81,7 @@ export const updateVenta = async (ventaId, ventaData) => {
     console.error('Error al actualizar venta:', err);
     throw new Error('No se pudo actualizar la venta. Intenta de nuevo.');
   }
+
+  
 };
 

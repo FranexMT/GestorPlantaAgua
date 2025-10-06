@@ -475,10 +475,10 @@ export default function SalesScreen() {
     setDetailsSale(sale);
   };
 
-  const handleDeleteSale = async (saleId) => {
+  const handleDeleteVenta = async (ventaId) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar esta venta?')) {
       try {
-        await deleteVenta(saleId);
+        await deleteVenta(ventaId);
       } catch (err) {
         alert('Error al eliminar la venta: ' + err.message);
       }
@@ -638,7 +638,7 @@ export default function SalesScreen() {
                         </button>
                         <button 
                           className="text-red-500 hover:text-red-300" 
-                          onClick={() => handleDeleteSale(sale.id)}
+                          onClick={() => handleDeleteVenta(sale.id)}
                           title="Eliminar"
                         >
                           <Trash2 size={18} />
