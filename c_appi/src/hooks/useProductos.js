@@ -15,13 +15,21 @@ export const useProductos = () => {
   const handleAddProducto = async (nuevoProducto) => {
     try {
       setError(null);
-      await onSubmitProducto(nuevoProducto);
-      await fetchProductos(); // Recargar la lista
+
+      const result = await onSubmitProducto(nuevoProducto);
+
+      if (!result.success) {
+        return { success: false, message: result.message || 'Error al agregar producto' };
+      }
+
+      await fetchProductos(); 
+      return { success: true };
     } catch (err) {
-      setError(err.message);
-      throw err;
+      console.error('Error al agregar producto:', err);
+      return { success: false, message: err.message };
     }
   };
+
 
   // Cargar productos
   const fetchProductos = async () => {
