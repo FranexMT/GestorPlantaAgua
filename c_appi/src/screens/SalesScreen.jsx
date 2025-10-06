@@ -1,8 +1,37 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Download, Search, Edit, Trash2, Eye, X, ShoppingCart, AlertTriangle } from 'lucide-react';
+import { Plus, Download, Search, Edit, Trash2, Eye, X, ShoppingCart, AlertTriangle, BadgeDollarSign } from 'lucide-react';
 import { useVentas } from '../hooks/useVentas';
 import { useProductos } from '../hooks/useProductos';
+import { toast } from 'react-toastify'; 
 
+// --- HELPERS DE TOASTIFY (Todos a top-right) ---
+const showExportToast = () => {
+    toast.success('¡Datos exportados correctamente!', {
+        position: "top-right",
+        autoClose: 2000,
+        theme: "dark",
+    });
+};
+
+const showSuccessToast = (message) => {
+    toast.success(message, {
+        position: "top-right",
+        autoClose: 2000,
+        theme: "dark",
+    });
+};
+
+const showErrorToast = (message) => {
+    // Los errores se mantienen en top-center para mayor visibilidad
+    toast.error(message, { 
+        position: "top-center",
+        autoClose: 3500,
+        theme: "dark",
+    });
+};
+
+
+// --- COMPONENTE DE ESTADO ---
 const StatusBadge = ({ status }) => {
   const statusStyles = {
     'Pagada': 'bg-green-500/50 text-green-200',
@@ -16,10 +45,11 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+// --- MODAL DE CREACIÓN / EDICIÓN (SaleModal) ---
 const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventario }) => {
   const [formData, setFormData] = useState({});
   const [productos, setProductos] = useState([]);
-  const [montoRecibido, setMontoRecibido] = useState(0);
+  const [montoRecibido, setMontoRecibido] = useState(''); 
   const [errorInventario, setErrorInventario] = useState('');
   
   const isEditing = sale !== null;
@@ -31,15 +61,20 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
           status: sale.status,
           date: sale.date
         });
-        setProductos(sale.items || []);
-        setMontoRecibido(sale.montoRecibido || 0);
+        const itemsConNumeros = sale.items.map(item => ({
+            ...item,
+            precio: parseFloat(item.precio) || 0,
+            subtotal: parseFloat(item.subtotal) || 0
+        }));
+        setProductos(itemsConNumeros || []);
+        setMontoRecibido(String(sale.montoRecibido || 0)); 
       } else {
         setFormData({ 
           status: 'Pagada', 
           date: new Date().toISOString().split('T')[0] 
         });
         setProductos([]);
-        setMontoRecibido(0);
+        setMontoRecibido(''); 
       }
       setErrorInventario('');
     }
@@ -47,17 +82,25 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
 
   if (!isOpen) return null;
 
+  const numericMontoRecibido = parseFloat(montoRecibido) || 0; 
+  
   const calcularTotal = () => {
     return productos.reduce((acc, prod) => acc + prod.subtotal, 0);
   };
 
   const totalVenta = calcularTotal();
-  const cambio = montoRecibido - totalVenta;
+  const cambio = numericMontoRecibido - totalVenta;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+
+  const handleMontoRecibidoChange = (e) => {
+      const value = e.target.value;
+      setMontoRecibido(value); 
+  };
+
 
   const verificarInventario = (productoId, cantidadSolicitada) => {
     const producto = productosInventario.find(p => p.id === productoId);
@@ -65,12 +108,13 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
       return { valido: false, mensaje: 'Producto no encontrado' };
     }
     const stock = parseInt(producto.stock) || 0;
+    
     const cantidadEnVenta = productos
       .filter(p => p.productoId === productoId)
       .reduce((sum, p) => sum + p.cantidad, 0);
 
-    const cantidadTotal = cantidadEnVenta + cantidadSolicitada;
-
+    const cantidadTotal = cantidadEnVenta + cantidadSolicitada; 
+    
     if (stock < cantidadTotal) {
       return { 
         valido: false, 
@@ -87,15 +131,14 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
     const productoExistenteIndex = productos.findIndex(p => p.productoId === producto.id);
     
     if (productoExistenteIndex !== -1) {
-      // Incrementar cantidad
-      const productoExistente = productos[productoExistenteIndex];
-      const verificacion = verificarInventario(producto.id, 1);
+      const verificacion = verificarInventario(producto.id, 1); 
       
       if (!verificacion.valido) {
         setErrorInventario(verificacion.mensaje);
         return;
       }
       
+      const productoExistente = productos[productoExistenteIndex];
       const nuevosProductos = [...productos];
       nuevosProductos[productoExistenteIndex] = {
         ...productoExistente,
@@ -105,8 +148,7 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
       setProductos(nuevosProductos);
 
     } else {
-      // Agregar nuevo producto
-      const verificacion = verificarInventario(producto.id, 1);
+      const verificacion = verificarInventario(producto.id, 0); 
       
       if (!verificacion.valido) {
         setErrorInventario(verificacion.mensaje);
@@ -119,7 +161,7 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
         nombre: producto.nombre,
         cantidad: 1,
         precio: precio,
-        subtotal: precio
+        subtotal: precio 
       };
       setProductos(prev => [...prev, productoConSubtotal]);
     }
@@ -138,7 +180,7 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
       setErrorInventario('Debes agregar al menos un producto a la venta');
       return;
     }
-    if (montoRecibido < totalVenta) {
+    if (numericMontoRecibido < totalVenta) {
       setErrorInventario('El monto recibido es menor al total de la venta.');
       return;
     }
@@ -147,28 +189,29 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
       ...formData,
       items: productos,
       total: totalVenta,
-      montoRecibido: montoRecibido,
+      montoRecibido: numericMontoRecibido, 
       cambio: cambio
     };
 
-    await onSave(ventaCompleta);
+    await onSave(ventaCompleta, sale); 
+    onClose();
   };
 
   const productosDisponibles = productosInventario.filter(p => (parseInt(p.stock) || 0) > 0);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 overflow-y-auto py-4">
-      <div className="bg-gray-800 rounded-xl shadow-2xl border border-blue-700/30 w-full max-w-3xl m-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50"> 
+      <div className="bg-gray-800 rounded-xl shadow-2xl border border-blue-700/30 w-full max-w-2xl m-4 h-full md:h-auto">
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold text-gray-100">
             {isEditing ? 'Editar Venta' : 'Registrar Nueva Venta'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={24} />
+          <button onClick={onClose} className="p-1 rounded-full text-gray-400 bg-[#1a1a1a] hover:text-white transition-colors">
+            <X size={20} />
           </button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto"> 
           {/* Información General */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-blue-300 flex items-center gap-2">
@@ -205,50 +248,50 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
               </div>
             )}
 
-            {/* Agregar Producto por botones */}
-            <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
-              <h4 className="text-sm font-medium text-gray-400 mb-2">Selecciona un producto para agregar:</h4>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            {/* Agregar Producto por botones (Reducción de espacio vertical) */}
+            <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+              <h4 className="text-sm font-medium text-gray-400 mb-2">Selecciona un producto:</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
                 {productosDisponibles.map(producto => (
                   <button
                     key={producto.id}
                     type="button"
                     onClick={() => handleProductButtonClick(producto)}
                     disabled={isLoading || (parseInt(producto.stock) || 0) === 0}
-                    className="p-3 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                    className="p-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
                   >
-                    <p className="text-sm">{producto.nombre}</p>
+                    <p className="text-sm truncate">{producto.nombre}</p>
                     <p className="text-xs opacity-80">${(parseFloat(producto.precio) || 0).toFixed(2)}</p>
                     <p className="text-xs opacity-60">Stock: {producto.stock}</p>
                   </button>
                 ))}
               </div>
               {productosDisponibles.length === 0 && (
-                 <p className="text-center text-sm text-gray-400 mt-4">No hay productos disponibles para agregar.</p>
+                <p className="text-center text-sm text-gray-400 mt-4">No hay productos disponibles.</p>
               )}
             </div>
 
-            {/* Lista de Productos */}
+            {/* Lista de Productos (Reducción de espacio vertical) */}
             {productos.length > 0 ? (
               <div className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-700/50">
                     <tr>
-                      <th className="p-3 text-left text-blue-300 font-medium">Producto</th>
-                      <th className="p-3 text-center text-blue-300 font-medium">Cantidad</th>
-                      <th className="p-3 text-right text-blue-300 font-medium">Precio</th>
-                      <th className="p-3 text-right text-blue-300 font-medium">Subtotal</th>
-                      <th className="p-3 text-center text-blue-300 font-medium">Acción</th>
+                      <th className="p-2 text-left text-blue-300 font-medium">Producto</th>
+                      <th className="p-2 text-center text-blue-300 font-medium">Cant.</th>
+                      <th className="p-2 text-right text-blue-300 font-medium">Precio</th>
+                      <th className="p-2 text-right text-blue-300 font-medium">Subtotal</th>
+                      <th className="p-2 text-center text-blue-300 font-medium">Acción</th>
                     </tr>
                   </thead>
                   <tbody>
                     {productos.map((prod, index) => (
                       <tr key={index} className="border-t border-gray-700">
-                        <td className="p-3 text-gray-200">{prod.nombre}</td>
-                        <td className="p-3 text-center text-gray-300">{prod.cantidad}</td>
-                        <td className="p-3 text-right text-gray-300">${prod.precio.toFixed(2)}</td>
-                        <td className="p-3 text-right text-green-400 font-medium">${prod.subtotal.toFixed(2)}</td>
-                        <td className="p-3 text-center">
+                        <td className="p-2 text-gray-200 truncate">{prod.nombre}</td>
+                        <td className="p-2 text-center text-gray-300">{prod.cantidad}</td>
+                        <td className="p-2 text-right text-gray-300">${prod.precio.toFixed(2)}</td>
+                        <td className="p-2 text-right text-green-400 font-medium">${prod.subtotal.toFixed(2)}</td>
+                        <td className="p-2 text-center">
                           <button
                             type="button"
                             onClick={() => eliminarProducto(index)}
@@ -264,7 +307,7 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
                 </table>
               </div>
             ) : (
-              <div className="bg-gray-900/50 p-8 rounded-lg border border-gray-700 text-center text-gray-400">
+              <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 text-center text-gray-400 text-sm">
                 No hay productos agregados.
               </div>
             )}
@@ -287,7 +330,7 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
                   name="montoRecibido" 
                   id="montoRecibido" 
                   value={montoRecibido} 
-                  onChange={(e) => setMontoRecibido(parseFloat(e.target.value) || 0)} 
+                  onChange={handleMontoRecibidoChange} 
                   required 
                   disabled={isLoading}
                   step="0.01"
@@ -311,13 +354,13 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
               type="button" 
               onClick={onClose} 
               disabled={isLoading}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-[#1a1a1a] border border-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
             <button 
               type="submit" 
-              disabled={isLoading || productos.length === 0 || montoRecibido < totalVenta}
+              disabled={isLoading || productos.length === 0 || numericMontoRecibido < totalVenta} 
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors font-semibold disabled:opacity-50"
             >
               {isLoading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Crear Venta')}
@@ -329,6 +372,7 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
   );
 };
 
+// --- MODAL DE DETALLES (SaleDetailsModal) ---
 const SaleDetailsModal = ({ isOpen, onClose, sale }) => {
   if (!isOpen || !sale) return null;
 
@@ -339,8 +383,8 @@ const SaleDetailsModal = ({ isOpen, onClose, sale }) => {
           <h2 className="text-xl font-bold text-gray-100">
             Detalles de la Venta: <span className="text-blue-400">{sale.id}</span>
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={24} />
+          <button onClick={onClose} className="p-1 rounded-full text-gray-400 bg-[#1a1a1a] hover:text-white transition-colors">
+            <X size={20} />
           </button>
         </div>
         <div className="p-6 space-y-4">
@@ -372,14 +416,14 @@ const SaleDetailsModal = ({ isOpen, onClose, sale }) => {
                       <tr key={index} className="border-t border-gray-700">
                         <td className="p-3 text-gray-200">{item.nombre}</td>
                         <td className="p-3 text-center text-gray-300">{item.cantidad}</td>
-                        <td className="p-3 text-right text-gray-300">${item.precio.toFixed(2)}</td>
-                        <td className="p-3 text-right text-green-400 font-medium">${item.subtotal.toFixed(2)}</td>
+                        <td className="p-3 text-right text-gray-300">${(item.precio || 0).toFixed(2)}</td>
+                        <td className="p-3 text-right text-green-400 font-medium">${(item.subtotal || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                     <tr className="border-t-2 border-blue-600 bg-gray-700/30">
                       <td colSpan="3" className="p-3 text-right text-blue-300 font-bold">TOTAL:</td>
                       <td className="p-3 text-right text-green-400 font-bold text-lg">
-                        ${sale.total.toFixed(2)}
+                        ${(sale.total || 0).toFixed(2)}
                       </td>
                     </tr>
                   </tbody>
@@ -415,12 +459,52 @@ const SaleDetailsModal = ({ isOpen, onClose, sale }) => {
   );
 };
 
+// --- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN ---
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children, saleId }) => {
+	if (!isOpen) return null;
+
+	return (
+		<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50">
+			<div className="bg-gray-800/80 rounded-xl shadow-2xl border border-blue-700/30 w-full max-w-sm m-4">
+				<div className="flex justify-between items-center p-4 border-b border-gray-700">
+					<h2 className="text-xl font-bold text-white">{title}</h2>
+					<button onClick={onClose} className="p-1 rounded-full text-gray-400 bg-[#1a1a1a] hover:text-white transition-colors"><X size={20} /></button>
+				</div>
+				<div className="p-6 text-gray-300">
+					<p className='text-white'>{children} (ID: <span className="font-mono text-red-300">{saleId}</span>)</p>
+				</div>
+				<div className="flex justify-end gap-3 p-4 bg-gray-900/50 rounded-b-xl">
+					<button
+						type="button"
+						onClick={onClose}
+						className="px-4 py-2 bg-[#1a1a1a] border border-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+					>
+						Cancelar
+					</button>
+					<button
+						type="button"
+						onClick={onConfirm}
+						className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+					>
+						Sí, Eliminar
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+};
+
+
+// --- COMPONENTE PRINCIPAL ---
 export default function SalesScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSale, setEditingSale] = useState(null);
   const [detailsSale, setDetailsSale] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [saleToDelete, setSaleToDelete] = useState(null);
 
   const {
     ventas,
@@ -437,14 +521,15 @@ export default function SalesScreen() {
     updateProducto
   } = useProductos();
 
-  const handleExportData = () => {
+  // FUNCIÓN CON LA LÓGICA REAL DE EXPORTACIÓN CSV
+  const executeExportLogic = () => {
     const dataToExport = filteredData;
-    const headers = "ID Venta,Fecha,Total,Estado,Productos";
+    const headers = "ID Venta,Fecha,Total,Estado,Monto Recibido,Cambio,Productos";
     const csvContent = [
       headers,
       ...dataToExport.map(s => {
         const productos = s.items?.map(item => `${item.nombre}(${item.cantidad})`).join(';') || '';
-        return `${s.id},${s.date},${s.total.toFixed(2)},${s.status},"${productos}"`;
+        return `${s.id},${s.date},${s.total.toFixed(2)},${s.status},${(s.montoRecibido || 0).toFixed(2)},${(s.cambio || 0).toFixed(2)},"${productos}"`;
       })
     ].join("\n");
 
@@ -458,8 +543,57 @@ export default function SalesScreen() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      showExportToast(); 
+    } else {
+        showErrorToast("Error del navegador: No se pudo iniciar la descarga.");
     }
   };
+
+
+  // --- FUNCIÓN DE EXPORTAR CON TOASTIFY INTERACTIVO (7 SEGUNDOS) ---
+  const handleExportData = () => {
+    const dataToExport = filteredData;
+    const toastId = 'export-confirm';
+
+    if (dataToExport.length === 0) {
+        showErrorToast("No hay ventas para exportar. La lista actual está vacía.");
+        return;
+    }
+    
+    toast(({ closeToast }) => (
+        <div className="p-1">
+            <p className="font-semibold text-gray-200 text-sm mb-2">
+                ¿Desea generar y descargar el reporte de ventas?
+            </p>
+            <div className="flex gap-3 justify-end">
+                <button
+                    onClick={() => toast.dismiss(toastId)}
+                    className="text-white bg-gray-600 hover:bg-gray-700 px-3 py-1 text-xs rounded transition-colors shadow-md border border-gray-500"
+                >
+                    Cancelar
+                </button>
+                <button
+                    onClick={() => {
+                        executeExportLogic();
+                        toast.dismiss(toastId);
+                    }}
+                    className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 text-xs rounded transition-colors font-bold shadow-md"
+                >
+                    Sí, Exportar
+                </button>
+            </div>
+        </div>
+    ), {
+        toastId: toastId,
+        position: "top-right", // AQUI ESTÁ EN TOP-RIGHT
+        autoClose: 7000, 
+        closeButton: false,
+        draggable: false,
+        theme: "dark",
+    });
+  };
+  // -------------------------------------------------------------------
+
 
   const handleOpenNewSale = () => {
     setEditingSale(null);
@@ -474,45 +608,90 @@ export default function SalesScreen() {
   const handleOpenDetailsSale = (sale) => {
     setDetailsSale(sale);
   };
-
-  const handleDeleteVenta = async (ventaId) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar esta venta?')) {
-      try {
-        await deleteVenta(ventaId);
-      } catch (err) {
-        alert('Error al eliminar la venta: ' + err.message);
-      }
-    }
+  
+  const handleDeleteClick = (venta) => {
+    setSaleToDelete(venta);
+    setIsConfirmModalOpen(true);
   };
 
-  const handleSaveSale = async (sale) => {
+  const handleConfirmDelete = async () => {
+    const deletedSaleId = saleToDelete.id; // Guardamos el ID antes de limpiar el estado
+    if (saleToDelete) {
+        try {
+            // Reversión de inventario
+            for (const item of saleToDelete.items) {
+                const producto = productosInventario.find(p => p.id === item.productoId);
+                if (producto) {
+                    const stockActual = parseInt(producto.stock) || 0;
+                    const nuevoStock = stockActual + item.cantidad; 
+                    await updateProducto(item.productoId, { ...producto, stock: nuevoStock });
+                }
+            }
+            await deleteVenta(saleToDelete.id);
+            
+            // MOSTRAR TOAST DE ELIMINACIÓN
+            showSuccessToast(`Venta ${deletedSaleId} eliminada y stock revertido correctamente.`);
+            
+        } catch (err) {
+            showErrorToast('Error al eliminar la venta y restaurar inventario: ' + err.message);
+        }
+    }
+    setIsConfirmModalOpen(false);
+    setSaleToDelete(null); 
+  };
+  
+  const handleSaveSale = async (newSaleData, originalSale) => {
     try {
       setIsSaving(true);
       
-      // Actualizar inventario de productos
-      for (const item of sale.items) {
-        const producto = productosInventario.find(p => p.id === item.productoId);
-        if (producto) {
-          const stockActual = parseInt(producto.stock) || 0;
-          const nuevoStock = editingSale ? (stockActual - item.cantidad) : (stockActual - item.cantidad);
-          await updateProducto(item.productoId, { ...producto, stock: nuevoStock });
+      let stockChanges = {}; 
+
+      if (originalSale) {
+        // 1. Revertir el stock de la venta original
+        for (const item of originalSale.items) {
+          stockChanges[item.productoId] = (stockChanges[item.productoId] || 0) + item.cantidad;
         }
       }
 
-      // Guardar la venta
-      if (editingSale) {
-        await updateVenta(editingSale.id, sale);
-      } else {
-        await addVenta(sale);
+      // 2. Aplicar el nuevo stock
+      for (const item of newSaleData.items) {
+        stockChanges[item.productoId] = (stockChanges[item.productoId] || 0) - item.cantidad;
       }
       
-      setIsModalOpen(false);
+      // 3. Aplicar los cambios netos al inventario
+      for (const [productoId, change] of Object.entries(stockChanges)) {
+        if (change !== 0) {
+          const producto = productosInventario.find(p => p.id === productoId);
+          if (producto) {
+            const stockActual = parseInt(producto.stock) || 0;
+            const nuevoStock = stockActual + change; 
+            
+            if (nuevoStock < 0) {
+                throw new Error(`Error: El stock de ${producto.nombre} no puede ser negativo.`);
+            }
+
+            await updateProducto(productoId, { ...producto, stock: nuevoStock });
+          }
+        }
+      }
+
+      // 4. Guardar la venta
+      if (originalSale) {
+        await updateVenta(originalSale.id, newSaleData);
+      } else {
+        await addVenta(newSaleData);
+      }
+      
+      // Muestra el toast de éxito al guardar
+      showSuccessToast(`Venta ${originalSale ? 'actualizada' : 'registrada'} correctamente.`);
+
     } catch (err) {
-      alert('Error al guardar la venta: ' + err.message);
+      showErrorToast('Error al guardar la venta: ' + err.message);
     } finally {
       setIsSaving(false);
     }
   };
+
 
   const filteredData = useMemo(() => {
     return ventas.filter(item =>
@@ -544,12 +723,21 @@ export default function SalesScreen() {
         onClose={() => setDetailsSale(null)}
         sale={detailsSale}
       />
+      
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      <ConfirmModal
+          isOpen={isConfirmModalOpen}
+          onClose={() => setIsConfirmModalOpen(false)}
+          onConfirm={handleConfirmDelete}
+          title="Confirmar Eliminación"
+          saleId={saleToDelete?.id}
+      >
+          ¿Estás seguro de que quieres **eliminar** esta venta? Se **revertirá** el inventario de los productos asociados.
+      </ConfirmModal>
 
       <header className="flex justify-between items-center mb-6 border-b border-blue-700/50 pb-4">
         <div className="flex items-center gap-4">
-          <svg className="h-10 w-10 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.17c-2.5-1.44-3.5-3.03-3.5-4.67 0-1.64 1.3-3.14 3.5-4.17.2-.1.45.03.55.25.12.28.01.58-.22.75-1.91.88-2.83 2.1-2.83 3.17s.92 2.29 2.83 3.17c.23.17.34.47.22.75-.1.22-.35.35-.55.25z" />
-          </svg>
+          <BadgeDollarSign size={40} className="text-blue-600"/> 
           <h1 className="text-3xl font-bold text-gray-100">Ventas</h1>
         </div>
       </header>
@@ -573,14 +761,14 @@ export default function SalesScreen() {
         <div className="flex gap-2">
           <button 
             onClick={handleOpenNewSale} 
-            className="flex items-center gap-2 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors shadow-blue-500/30"
+            className="flex items-center gap-2 relative p-2 font-semibold leading-6 text-white border border-blue-600 bg-[#1a1a1a] shadow-2xl cursor-pointer rounded-xl transition-transform duration-300 ease-in-out hover:scale-[1.02] active:scale-[0.98] hover:bg-gray-700/50"
           >
             <Plus size={25} />
             Nueva Venta
           </button>
           <button 
             onClick={handleExportData} 
-            className="flex items-center gap-2 bg-blue-600 text-white font-bold py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors shadow-blue-500/30"
+            className="flex items-center gap-2 relative p-2 font-semibold leading-6 text-white border border-blue-600 bg-[#1a1a1a] shadow-2xl cursor-pointer rounded-xl transition-transform duration-300 ease-in-out hover:scale-[1.02] active:scale-[0.98] hover:bg-gray-700/50"
           >
             <Download size={25} />
             Exportar
@@ -623,25 +811,25 @@ export default function SalesScreen() {
                     <td className="p-4">
                       <div className="flex gap-3">
                         <button 
-                          className="text-gray-500 hover:text-gray-300" 
+                          className="p-2 rounded-full bg-[#1a1a1a] shadow-lg hover:ring-2 hover:ring-gray-500 transition-all duration-200"
                           onClick={() => handleOpenDetailsSale(sale)}
                           title="Ver detalles"
                         >
-                          <Eye size={18} />
+                          <Eye size={18} className="text-gray-400 hover:text-gray-200"/>
                         </button>
                         <button 
-                          className="text-blue-500 hover:text-blue-300" 
+                          className="p-2 rounded-full bg-[#1a1a1a] shadow-lg hover:ring-2 hover:ring-blue-500 transition-all duration-200" 
                           onClick={() => handleOpenEditSale(sale)}
                           title="Editar"
                         >
-                          <Edit size={18} />
+                          <Edit size={18} className="text-blue-400 hover:text-blue-200"/>
                         </button>
                         <button 
-                          className="text-red-500 hover:text-red-300" 
-                          onClick={() => handleDeleteVenta(sale.id)}
+                          className="p-2 rounded-full bg-[#1a1a1a] shadow-lg hover:ring-2 hover:ring-red-500 transition-all duration-200" 
+                          onClick={() => handleDeleteClick(sale)}
                           title="Eliminar"
                         >
-                          <Trash2 size={18} />
+                          <Trash2 size={18} className="text-red-400 hover:text-red-200"/>
                         </button>
                       </div>
                     </td>
