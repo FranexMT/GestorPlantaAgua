@@ -169,17 +169,28 @@ export default function App() {
     };
 
     const handleSaveProduct = async (productId, productData) => {
-        try {
-            if (productId) {
-                await updateProducto(productId, productData);
+    try {
+        if (productId) {
+            const result = await updateProducto(productId, productData);
+            if (result.success) {
+                toast('Producto actualizado correctamente', { type: 'success' });
             } else {
-                await addProducto(productData);
+                toast(result.message || 'Error al actualizar producto', { type: 'error' });
             }
-        } catch (e) {
-            console.error("Error al guardar producto:", e);
-            toast(`Error al guardar: ${e.message}`, { type: 'error' });
+        } else {
+        const result = await addProducto(productData);
+        if (!result.success) {
+            toast(result.message || 'El producto ya existe', { type: 'error' });
+            return; 
         }
+        toast('Producto agregado correctamente', { type: 'success' });
+        }
+    } catch (e) {
+        console.error('Error al guardar producto:', e);
+        toast(`Error al guardar: ${e.message}`, { type: 'error' });
+    }
     };
+
 
     const handleDeleteProduct = (productId) => {
         setProductToDelete(productId);

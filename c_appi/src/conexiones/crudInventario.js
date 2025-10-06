@@ -5,7 +5,9 @@ import {
   addDoc,
   deleteDoc,
   updateDoc,
-  doc
+  doc,
+  where,
+  query
 } from 'firebase/firestore';
 
 const productosCollection = collection(db, "productos");
@@ -38,21 +40,31 @@ export const deleteProducto = async (id) => {
   }
 };
 
+//Agregar un nuevo producto
 export const onSubmitProducto = async (producto = null) => {
   try {
-    // Si no se proporciona producto, usar valores por defecto
     const nuevoProducto = producto || {
       nombre: 'bolsa de hielo',
-      categoría: 'hielo',
+      categoria: 'hielo',
       precio: 20,
       stock: 100,
     };
-    
+
+    // consulta para buscar productos con el mismo nombre
+    const q = query(productosCollection, where("nombre", "==", nuevoProducto.nombre));
+    const snapshot = await getDocs(q);
+
+    //Aqui es la validacion en donde si ya existe un producto con ese nombre, lanzar error
+    if (!snapshot.empty) {
+      throw new Error(`El producto "${nuevoProducto.nombre}" ya existe.`);
+    }
+
+  
     const docRef = await addDoc(productosCollection, nuevoProducto);
     console.log('Producto agregado con ID:', docRef.id);
     return { id: docRef.id, ...nuevoProducto };
   } catch (err) {
-    console.error('Error al agregar producto:', err);
+    console.error('Error al agregar producto:', err.message);
     throw err;
   }
 };
