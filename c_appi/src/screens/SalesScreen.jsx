@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Download, Search, Edit, Trash2, Eye, X, ShoppingCart, AlertTriangle, BadgeDollarSign } from 'lucide-react';
+import { Plus, Download, Search, Edit, Trash2, Eye, X, ShoppingCart, AlertTriangle, BadgeDollarSign, Star } from 'lucide-react';
 import { useVentas } from '../hooks/useVentas';
 import { useProductos } from '../hooks/useProductos';
 import { toast } from 'react-toastify'; 
@@ -51,6 +51,17 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
   const [productos, setProductos] = useState([]);
   const [montoRecibido, setMontoRecibido] = useState(''); 
   const [errorInventario, setErrorInventario] = useState('');
+  const [productQuery, setProductQuery] = useState(''); // búsqueda rápida dentro del modal
+  const [keypadTarget, setKeypadTarget] = useState(null); // { type: 'monto' } | { type: 'cantidad', index }
+  const [keypadValue, setKeypadValue] = useState('');
+  const [favoritos, setFavoritos] = useState(() => {
+    try {
+      const raw = localStorage.getItem('fav_productos');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   
   const isEditing = sale !== null;
 
@@ -77,6 +88,9 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
         setMontoRecibido(''); 
       }
       setErrorInventario('');
+  // abrir keypad por defecto en monto cuando se abre el modal
+  setKeypadTarget({ type: 'monto' });
+  setKeypadValue('');
     }
   }, [isOpen, sale, isEditing]);
 
@@ -99,6 +113,98 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
   const handleMontoRecibidoChange = (e) => {
       const value = e.target.value;
       setMontoRecibido(value); 
+  };
+
+  const openKeypadForMonto = () => {
+    setKeypadTarget({ type: 'monto' });
+    setKeypadValue(String(montoRecibido || ''));
+  };
+
+  const openKeypadForCantidad = (index) => {
+    const prod = productos[index];
+    if (!prod) return;
+    setKeypadTarget({ type: 'cantidad', index });
+    setKeypadValue(String(prod.cantidad || ''));
+  };
+
+  const applyKeypadValue = (value) => {
+    if (!keypadTarget) return;
+    if (keypadTarget.type === 'monto') {
+      setMontoRecibido(value);
+    } else if (keypadTarget.type === 'cantidad') {
+      const idx = keypadTarget.index;
+      const prod = productos[idx];
+      if (!prod) return;
+      const nuevaCantidad = parseInt(value) || 0;
+      const delta = nuevaCantidad - prod.cantidad;
+      const verificacion = verificarInventario(prod.productoId, delta);
+      if (!verificacion.valido) {
+        setErrorInventario(verificacion.mensaje);
+        return;
+      }
+      const nuevos = [...productos];
+      if (nuevaCantidad <= 0) {
+        nuevos.splice(idx, 1);
+      } else {
+        nuevos[idx] = { ...prod, cantidad: nuevaCantidad, subtotal: nuevaCantidad * prod.precio };
+      }
+      setProductos(nuevos);
+      setErrorInventario('');
+    }
+    setKeypadTarget(null);
+    setKeypadValue('');
+  };
+
+  const updateLiveValue = (value) => {
+    if (!keypadTarget) return;
+    if (keypadTarget.type === 'monto') {
+      setMontoRecibido(value);
+    } else if (keypadTarget.type === 'cantidad') {
+      const idx = keypadTarget.index;
+      const prod = productos[idx];
+      if (!prod) return;
+      const nuevaCantidad = parseInt(value) || 0;
+      const delta = nuevaCantidad - prod.cantidad;
+      const verificacion = verificarInventario(prod.productoId, delta);
+      if (!verificacion.valido) {
+        setErrorInventario(verificacion.mensaje);
+        return;
+      }
+      const nuevos = [...productos];
+      if (nuevaCantidad <= 0) {
+        nuevos.splice(idx, 1);
+      } else {
+        nuevos[idx] = { ...prod, cantidad: nuevaCantidad, subtotal: nuevaCantidad * prod.precio };
+      }
+      setProductos(nuevos);
+      setErrorInventario('');
+    }
+  };
+
+  const keypadPress = (char) => {
+    if (char === 'C') {
+      setKeypadValue('');
+      updateLiveValue('');
+      return;
+    }
+    if (char === '←') {
+      setKeypadValue(prev => {
+        const next = (prev || '').slice(0, -1);
+        updateLiveValue(next);
+        return next;
+      });
+      return;
+    }
+    // handle dot only for monto
+    if (char === '.') {
+      if (keypadTarget?.type !== 'monto') return;
+      if (keypadValue.includes('.')) return;
+    }
+    setKeypadValue(prev => {
+      const next = (prev || '') + char;
+      updateLiveValue(next);
+      return next;
+    });
   };
 
 
@@ -168,6 +274,49 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
     setErrorInventario('');
   };
 
+  const toggleFavorito = (productoId) => {
+    setFavoritos(prev => {
+      const existe = prev.includes(productoId);
+      const next = existe ? prev.filter(id => id !== productoId) : [...prev, productoId];
+      try { localStorage.setItem('fav_productos', JSON.stringify(next)); } catch(e) {}
+      return next;
+    });
+  };
+
+  const incrementProducto = (index) => {
+    const prod = productos[index];
+    const verificacion = verificarInventario(prod.productoId, 1);
+    if (!verificacion.valido) {
+      setErrorInventario(verificacion.mensaje);
+      return;
+    }
+    const nuevos = [...productos];
+    nuevos[index] = {
+      ...prod,
+      cantidad: prod.cantidad + 1,
+      subtotal: (prod.cantidad + 1) * prod.precio
+    };
+    setProductos(nuevos);
+    setErrorInventario('');
+  };
+
+  const decrementProducto = (index) => {
+    const prod = productos[index];
+    if (prod.cantidad <= 1) {
+      // eliminar si llega a 0
+      setProductos(prev => prev.filter((_, i) => i !== index));
+      return;
+    }
+    const nuevos = [...productos];
+    nuevos[index] = {
+      ...prod,
+      cantidad: prod.cantidad - 1,
+      subtotal: (prod.cantidad - 1) * prod.precio
+    };
+    setProductos(nuevos);
+    setErrorInventario('');
+  };
+
   const eliminarProducto = (index) => {
     setProductos(prev => prev.filter((_, i) => i !== index));
     setErrorInventario('');
@@ -201,7 +350,7 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50"> 
-      <div className="bg-gray-800 rounded-xl shadow-2xl border border-blue-700/30 w-full max-w-2xl m-4 h-full md:h-auto">
+  <div className="bg-gray-800 rounded-xl shadow-2xl border border-blue-700/30 w-full max-w-6xl m-4 h-full md:h-auto">
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold text-gray-100">
             {isEditing ? 'Editar Venta' : 'Registrar Nueva Venta'}
@@ -211,7 +360,9 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
           </button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto"> 
+        <div className="p-6 max-h-[calc(100vh-140px)] overflow-y-auto md:flex md:gap-6">
+          {/* Formulario principal - ocupa la columna izquierda */}
+          <form onSubmit={handleSubmit} className="space-y-4 flex-1"> 
           {/* Información General */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-blue-300 flex items-center gap-2">
@@ -251,19 +402,51 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
             {/* Agregar Producto por botones (Reducción de espacio vertical) */}
             <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
               <h4 className="text-sm font-medium text-gray-400 mb-2">Selecciona un producto:</h4>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                {productosDisponibles.map(producto => (
-                  <button
-                    key={producto.id}
-                    type="button"
-                    onClick={() => handleProductButtonClick(producto)}
-                    disabled={isLoading || (parseInt(producto.stock) || 0) === 0}
-                    className="p-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
-                  >
-                    <p className="text-sm truncate">{producto.nombre}</p>
-                    <p className="text-xs opacity-80">${(parseFloat(producto.precio) || 0).toFixed(2)}</p>
-                    <p className="text-xs opacity-60">Stock: {producto.stock}</p>
-                  </button>
+
+              {/* Búsqueda rápida dentro del modal */}
+              <div className="mb-3">
+                <input
+                  type="text"
+                  placeholder="Buscar producto por nombre..."
+                  value={productQuery}
+                  onChange={(e) => setProductQuery(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Favoritos */}
+              {favoritos.length > 0 && (
+                <div className="mb-3 flex gap-2 overflow-x-auto py-1">
+                  {favoritos.map(fid => {
+                    const p = productosDisponibles.find(x => x.id === fid);
+                    if (!p) return null;
+                    return (
+                      <button key={fid} type="button" onClick={() => handleProductButtonClick(p)} className="flex-shrink-0 px-3 py-2 bg-yellow-500 text-black rounded-lg font-semibold">
+                        {p.nombre}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-72 overflow-y-auto p-2">
+                {productosDisponibles
+                  .map(producto => (
+          <div key={producto.id} className="p-4 bg-gradient-to-br from-gray-800/80 to-gray-800/60 text-white rounded-2xl hover:scale-[1.02] transition-transform shadow-2xl border border-gray-700 min-h-[6rem] flex flex-col justify-between">
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="text-left flex-1">
+            <p className="text-sm font-semibold truncate">{producto.nombre}</p>
+            <p className="text-sm opacity-80 mt-2">${(parseFloat(producto.precio) || 0).toFixed(2)}</p>
+            <p className="text-sm opacity-60 mt-1">Stock: {producto.stock}</p>
+                      </div>
+                      <div className="flex flex-col items-center gap-2 w-24 flex-shrink-0">
+                        <button onClick={() => toggleFavorito(producto.id)} title="Favorito" className={`p-2 rounded-full shadow-lg ${favoritos.includes(producto.id) ? 'bg-yellow-400 text-black' : 'bg-gray-800 text-white'}`}>
+                          <Star size={16} />
+                        </button>
+                        <button onClick={() => handleProductButtonClick(producto)} className="w-full px-3 py-2 bg-blue-600 rounded-lg text-white font-semibold">Añadir</button>
+                      </div>
+                    </div>
+                  </div>
                 ))}
               </div>
               {productosDisponibles.length === 0 && (
@@ -288,18 +471,26 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
                     {productos.map((prod, index) => (
                       <tr key={index} className="border-t border-gray-700">
                         <td className="p-2 text-gray-200 truncate">{prod.nombre}</td>
-                        <td className="p-2 text-center text-gray-300">{prod.cantidad}</td>
+                        <td className="p-2 text-center text-gray-300">
+                          <div className="inline-flex items-center gap-2">
+                            <button type="button" onClick={() => decrementProducto(index)} className="px-2 py-1 bg-gray-800 rounded text-gray-200">-</button>
+                            <button type="button" onClick={() => openKeypadForCantidad(index)} className="px-3 py-1 bg-gray-700 rounded text-white">{prod.cantidad}</button>
+                            <button type="button" onClick={() => incrementProducto(index)} className="px-2 py-1 bg-gray-800 rounded text-gray-200">+</button>
+                          </div>
+                        </td>
                         <td className="p-2 text-right text-gray-300">${prod.precio.toFixed(2)}</td>
                         <td className="p-2 text-right text-green-400 font-medium">${prod.subtotal.toFixed(2)}</td>
                         <td className="p-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => eliminarProducto(index)}
-                            disabled={isLoading}
-                            className="text-red-500 hover:text-red-400 disabled:opacity-50"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => eliminarProducto(index)}
+                              disabled={isLoading}
+                              className="text-red-500 hover:text-red-400 disabled:opacity-50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -325,18 +516,19 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
                 <label htmlFor="montoRecibido" className="block text-sm font-medium text-blue-300 mb-1">
                   Monto Recibido
                 </label>
-                <input 
-                  type="number" 
-                  name="montoRecibido" 
-                  id="montoRecibido" 
-                  value={montoRecibido} 
-                  onChange={handleMontoRecibidoChange} 
-                  required 
-                  disabled={isLoading}
-                  step="0.01"
-                  min={totalVenta}
-                  className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50" 
-                />
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    name="montoRecibido" 
+                    id="montoRecibido" 
+                    value={montoRecibido} 
+                    onChange={(e) => setMontoRecibido(e.target.value)} 
+                    required 
+                    disabled={isLoading}
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50" 
+                  />
+                  <button type="button" onClick={openKeypadForMonto} className="absolute right-1 top-1/2 -translate-y-1/2 px-3 py-1 bg-blue-600 rounded text-white">Teclado</button>
+                </div>
               </div>
               <div className="flex justify-between items-center text-lg font-bold">
                 <span className="text-blue-300">Cambio:</span>
@@ -366,7 +558,56 @@ const SaleModal = ({ isOpen, onClose, onSave, sale, isLoading, productosInventar
               {isLoading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Crear Venta')}
             </button>
           </div>
-        </form>
+          </form>
+
+          {/* Keypad - columna derecha en md+, bloque inferior en móvil */}
+          {keypadTarget && (
+            <aside className="mt-4 md:mt-0 md:w-80 md:flex-shrink-0">
+              <div className="p-4 bg-gray-900/60 rounded-lg border border-gray-700 h-full flex flex-col">
+                <div className="mb-2 text-right text-white">
+                  <div className="text-sm text-gray-300">Entrada:</div>
+                  <div className="text-2xl font-mono text-white">{keypadValue || '0'}</div>
+                </div>
+
+                {/* Quick presets solo para monto */}
+                {keypadTarget.type === 'monto' && (
+                  <div className="flex gap-2 mb-3">
+                    {[20,50,100].map(a => (
+                      <button key={a} type="button" onClick={() => { setKeypadValue(String(a)); updateLiveValue(String(a)); }} className="flex-1 py-2 bg-blue-600 rounded text-white font-semibold">${a}</button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-2 md:grid-cols-3 flex-1">
+                  {['1','2','3','4','5','6','7','8','9','.','0','←'].map((k) => (
+                    <button key={k} type="button" onClick={() => keypadPress(k)} className="py-4 md:py-5 bg-gray-800 rounded text-white text-xl md:text-2xl shadow-md">{k}</button>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 mt-3">
+                  <button type="button" onClick={() => { keypadPress('C'); }} className="w-full py-2 bg-red-600 rounded text-white font-semibold">Limpiar</button>
+                  <button type="button" onClick={() => { 
+                      // Validación final antes de cerrar
+                      if (keypadTarget.type === 'cantidad') {
+                        const idx = keypadTarget.index;
+                        const prod = productos[idx];
+                        const nuevaCantidad = parseInt(keypadValue) || 0;
+                        const delta = nuevaCantidad - (prod?.cantidad || 0);
+                        const verif = verificarInventario(prod.productoId, delta);
+                        if (!verif.valido) {
+                          showErrorToast(verif.mensaje);
+                          return;
+                        }
+                      }
+                      applyKeypadValue(keypadValue);
+                    }} className="w-full py-2 bg-green-600 rounded text-white font-semibold">Aceptar</button>
+                </div>
+
+                <button type="button" onClick={() => { setKeypadTarget(null); setKeypadValue(''); }} className="mt-3 text-sm text-gray-300">Cerrar teclado</button>
+              </div>
+            </aside>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -735,10 +976,15 @@ export default function SalesScreen() {
           ¿Estás seguro de que quieres **eliminar** esta venta? Se **revertirá** el inventario de los productos asociados.
       </ConfirmModal>
 
-      <header className="flex justify-between items-center mb-6 border-b border-blue-700/50 pb-4">
+      <header className="flex justify-between items-center mb-6 pb-4">
         <div className="flex items-center gap-4">
-          <BadgeDollarSign size={40} className="text-blue-600"/> 
-          <h1 className="text-3xl font-bold text-gray-100">Ventas</h1>
+          <div className="p-3 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 shadow-lg">
+            <BadgeDollarSign size={36} className="text-white"/>
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-100">Ventas</h1>
+            <p className="text-sm text-gray-400">Registra ventas rápido con el teclado táctil y favoritos</p>
+          </div>
         </div>
       </header>
 
