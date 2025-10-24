@@ -33,16 +33,16 @@ export default function LoginScreen({ onLogin }) {
   <div className="min-h-screen flex items-center justify-center animated-water-bg text-slate-100 font-sans p-4">
 
       {/* Contenedor Principal: borde de gradiente aqua -> azul profundo */}
-      <div className="relative p-0.5 rounded-2xl shadow-2xl bg-gradient-to-br from-teal-500/80 to-sky-700/80">
+  <div className="relative p-0.5 rounded-2xl shadow-2xl bg-linear-to-br from-teal-500/80 to-sky-700/80">
 
         {/* Formulario Interno: fondo oscuro neutro para resaltar los acentos azules/verde-agua */}
         <form 
           onSubmit={handleSubmit} 
-          className="relative z-10 w-full max-w-sm p-10 bg-slate-800 rounded-2xl"
+          className="relative z-10 w-full max-w-sm sm:max-w-md p-8 sm:p-10 bg-slate-800 rounded-2xl"
         >
 
           {/* Título: gradiente inspirado en agua */}
-          <h2 className="text-4xl font-extrabold mb-8 text-center tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-sky-300 to-teal-200">
+          <h2 className="text-3xl sm:text-4xl font-extrabold mb-8 text-center tracking-tight bg-clip-text text-transparent bg-linear-to-r from-sky-300 to-teal-200">
             EL MANANTIAL
           </h2>
 

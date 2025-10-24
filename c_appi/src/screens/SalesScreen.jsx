@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Plus, Download, Search, Edit, Trash2, Eye, X, ShoppingCart, AlertTriangle, BadgeDollarSign, Star } from 'lucide-react';
+import Keypad from '../components/Keypad';
 import { useVentas } from '../hooks/useVentas';
 import { useProductos } from '../hooks/useProductos';
 import { toast } from 'react-toastify'; 
@@ -480,10 +481,10 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
             </h2>
             
             {/* Contenedor principal para productos/resumen (flexible) y keypad (flexible) */}
-            <div className="md:flex md:gap-4 flex-1 min-h-0">
+            <div className="md:flex md:gap-4 flex-1 min-h-0 flex-col md:flex-row">
                 
                 {/* Columna Izquierda: Productos y Resumen. ANCHO REDUCIDO A 50% */}
-                <form onSubmit={handleTerminalSubmit} className="space-y-3 flex flex-col min-h-0 md:w-1/2 md:flex-shrink-0"> 
+                <form onSubmit={handleTerminalSubmit} className="w-full space-y-3 flex flex-col min-h-0 md:w-1/2 md:flex-shrink-0"> 
                     
                     {/* Sección de Productos para Añadir (Lista Compacta) */}
                     <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700 flex-shrink-0">
@@ -516,7 +517,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                         )}
 
                         {/* Lista de botones de productos (Scrollable) */}
-                        <div className="space-y-1 max-h-[120px] overflow-y-auto pr-1">
+                        <div className="space-y-1 max-h-[120px] sm:max-h-[140px] overflow-y-auto pr-1">
                             {productosDisponibles.map(producto => (
                                 <div key={producto.id} className="p-1.5 bg-gray-800/80 text-white rounded-lg border border-gray-700 flex justify-between items-center gap-1 text-sm">
                                     <div className="text-left flex-1 min-w-0">
@@ -538,7 +539,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                     </div>
                     
                     {/* Lista de Productos de la Venta (Scrollable) */}
-                    <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
+                    <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
                         <h3 className="text-base font-semibold text-blue-300 flex items-center gap-2 flex-shrink-0">Productos en Venta</h3>
                         {errorInventario && (
                             <div className="bg-red-500/20 border border-red-500 rounded-lg p-2 flex items-start gap-2 flex-shrink-0">
@@ -546,169 +547,175 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                                 <p className="text-red-200 text-xs">{errorInventario}</p>
                             </div>
                         )}
-                        {productos.length > 0 ? (
-                            <div className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden">
-                                <table className="w-full text-xs">
-                                    <thead className="bg-gray-700/50 sticky top-0">
-                                        <tr>
-                                            <th className="p-1.5 text-left text-blue-300 font-medium">Producto</th>
-                                            <th className="p-1.5 text-center text-blue-300 font-medium w-24">Cant.</th>
-                                            <th className="p-1.5 text-right text-blue-300 font-medium">Subtotal</th>
-                                            <th className="p-1.5 text-center text-blue-300 font-medium w-10">Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-700">
-                                        {productos.map((prod, index) => (
-                                            <tr key={index}>
-                                                <td className="p-1.5 text-gray-200 truncate">{prod.nombre}</td>
-                                                <td className="p-1.5 text-center text-gray-300">
-                                                    <div className="inline-flex items-center gap-0.5">
-                                                        <button type="button" onClick={() => decrementProducto(index)} className="px-1 py-0.5 bg-gray-800 rounded text-gray-200 text-base leading-none">-</button>
-                                                        <button type="button" onClick={() => openKeypadForCantidad(index)} className={`px-2 py-0.5 rounded text-white font-mono ${keypadTarget?.type === 'cantidad' && keypadTarget.index === index ? 'bg-blue-600 ring-1 ring-blue-400' : 'bg-gray-700'}`}>{prod.cantidad}</button>
-                                                        <button type="button" onClick={() => incrementProducto(index)} className="px-1 py-0.5 bg-gray-800 rounded text-gray-200 text-base leading-none">+</button>
-                                                    </div>
-                                                </td>
-                                                <td className="p-1.5 text-right text-green-400 font-medium">${prod.subtotal.toFixed(2)}</td>
-                                                <td className="p-1.5 text-center">
-                                                    <button type="button" onClick={() => eliminarProducto(index)} className="text-red-500 hover:text-red-400">
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </td>
+
+                        {/* Mobile: card list */}
+                        <div className="sm:hidden space-y-2">
+                            {productos.length > 0 ? productos.map((prod, index) => (
+                                <div key={index} className="bg-gray-900/60 border border-gray-700 rounded-lg p-3 flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-sm text-gray-100 truncate">{prod.nombre}</p>
+                                        <p className="text-xs text-gray-400">Subtotal: <span className="text-green-400 font-medium">${prod.subtotal.toFixed(2)}</span></p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="inline-flex items-center gap-1">
+                                            <button onClick={() => decrementProducto(index)} className="px-2 py-1 bg-gray-800 rounded text-gray-200">-</button>
+                                            <button onClick={() => openKeypadForCantidad(index)} className={`px-3 py-1 rounded font-mono ${keypadTarget?.type === 'cantidad' && keypadTarget.index === index ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white'}`}>{prod.cantidad}</button>
+                                            <button onClick={() => incrementProducto(index)} className="px-2 py-1 bg-gray-800 rounded text-gray-200">+</button>
+                                        </div>
+                                        <button onClick={() => eliminarProducto(index)} className="p-2 rounded bg-red-700/30 text-red-300">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700 text-center text-gray-400 text-xs">No hay productos agregados.</div>
+                            )}
+                        </div>
+
+                        {/* Desktop/Tablet: table */}
+                        <div className="hidden sm:block">
+                            {productos.length > 0 ? (
+                                <div className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-x-auto">
+                                    <table className="min-w-[560px] w-full text-xs table-fixed">
+                                        <thead className="bg-gray-700/50 sticky top-0">
+                                            <tr>
+                                                <th className="p-1.5 text-left text-blue-300 font-medium">Producto</th>
+                                                <th className="p-1.5 text-center text-blue-300 font-medium w-24">Cant.</th>
+                                                <th className="p-1.5 text-right text-blue-300 font-medium">Subtotal</th>
+                                                <th className="p-1.5 text-center text-blue-300 font-medium w-10">Acción</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ) : (
-                            <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700 text-center text-gray-400 text-xs">
-                                No hay productos agregados.
-                            </div>
-                        )}
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-700">
+                                            {productos.map((prod, index) => (
+                                                <tr key={index}>
+                                                    <td className="p-1.5 text-gray-200 truncate max-w-[180px]">{prod.nombre}</td>
+                                                    <td className="p-1.5 text-center text-gray-300">
+                                                        <div className="inline-flex items-center gap-0.5">
+                                                            <button type="button" onClick={() => decrementProducto(index)} className="px-1 py-0.5 bg-gray-800 rounded text-gray-200 text-base leading-none">-</button>
+                                                            <button type="button" onClick={() => openKeypadForCantidad(index)} className={`px-2 py-0.5 rounded text-white font-mono ${keypadTarget?.type === 'cantidad' && keypadTarget.index === index ? 'bg-blue-600 ring-1 ring-blue-400' : 'bg-gray-700'}`}>{prod.cantidad}</button>
+                                                            <button type="button" onClick={() => incrementProducto(index)} className="px-1 py-0.5 bg-gray-800 rounded text-gray-200 text-base leading-none">+</button>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-1.5 text-right text-green-400 font-medium">${prod.subtotal.toFixed(2)}</td>
+                                                    <td className="p-1.5 text-center">
+                                                        <button type="button" onClick={() => eliminarProducto(index)} className="text-red-500 hover:text-red-400">
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700 text-center text-gray-400 text-xs">No hay productos agregados.</div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Resumen de Pago y Botones de Acción (Fijo al final) */}
-                    <div className="flex-shrink-0 space-y-2 pt-3 border-t border-gray-700">
-                        <h3 className="text-base font-semibold text-blue-300">Resumen de Pago</h3>
-                        <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700 space-y-2">
-                            <div className="flex justify-between items-center text-lg font-bold">
-                                <span className="text-blue-300">TOTAL:</span>
-                                <span className="text-green-400">${totalVenta.toFixed(2)}</span>
+                    <div className="flex-shrink-0 pt-3">
+                        <div className="md:sticky md:bottom-0 md:bg-transparent md:pt-3">
+                            <div className="bg-gradient-to-r from-slate-900/60 to-slate-800/40 rounded-lg p-3 border border-gray-700 shadow-inner">
+                                <div className="flex items-center justify-between gap-4">
+                                    <div>
+                                        <div className="text-sm text-blue-300">TOTAL</div>
+                                        <div className="text-2xl font-extrabold text-white">${totalVenta.toFixed(2)}</div>
+                                        <div className="text-xs text-gray-400">Items: {productos.length}</div>
+                                    </div>
+
+                                    <div className="w-1/2">
+                                        <label htmlFor="montoRecibido" className="block text-xs font-medium text-blue-300 mb-1">Monto Recibido</label>
+                                        <div className="relative">
+                                            <input 
+                                                type="text" 
+                                                name="montoRecibido" 
+                                                id="montoRecibido" 
+                                                value={montoRecibido} 
+                                                onChange={(e) => setMontoRecibido(e.target.value)} 
+                                                required 
+                                                disabled={isLoading}
+                                                onClick={openKeypadForMonto}
+                                                className={`w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 disabled:opacity-50 text-sm ${keypadTarget?.type === 'monto' ? 'ring-blue-500 border-blue-500' : 'focus:ring-blue-500'}`}
+                                            />
+                                            <div className='absolute right-3 top-3 text-white font-mono opacity-60 text-sm'>${(parseFloat(montoRecibido) || 0).toFixed(2)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 flex items-center justify-between gap-3">
+                                    <div className="text-sm">
+                                        <div className={`font-semibold ${cambio >= 0 ? 'text-green-400' : 'text-red-400'}`}>Cambio: ${cambio.toFixed(2)}</div>
+                                    </div>
+
+                                    <div className="w-44">
+                                        <button 
+                                            type="submit" 
+                                            disabled={isLoading || productos.length === 0 || (formData.status === 'Pagada' && numericMontoRecibido < totalVenta)} 
+                                            className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-teal-500 text-white rounded-lg hover:from-blue-500 hover:to-teal-400 transition-all font-semibold text-sm shadow-lg disabled:opacity-50"
+                                        >
+                                            {isLoading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Registrar Venta')}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            
-                            {/* Monto Recibido */}
-                            <div className="relative">
-                                <label htmlFor="montoRecibido" className="block text-xs font-medium text-blue-300 mb-0.5">Monto Recibido</label>
-                                <input 
-                                    type="text" 
-                                    name="montoRecibido" 
-                                    id="montoRecibido" 
-                                    value={montoRecibido} 
-                                    onChange={(e) => setMontoRecibido(e.target.value)} 
-                                    required 
-                                    disabled={isLoading}
-                                    onClick={openKeypadForMonto}
-                                    className={`w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:ring-2 disabled:opacity-50 text-sm ${keypadTarget?.type === 'monto' ? 'ring-blue-500 border-blue-500' : 'focus:ring-blue-500'}`}
-                                />
-                                <div className='absolute right-2 top-6 text-white font-mono opacity-50 text-xs'>${(parseFloat(montoRecibido) || 0).toFixed(2)}</div>
-                            </div>
-                            
-                            {/* Cambio */}
-                            <div className="flex justify-between items-center text-lg font-bold">
-                                <span className="text-blue-300">Cambio:</span>
-                                <span className={`${cambio >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    ${cambio.toFixed(2)}
-                                </span>
-                            </div>
-                        </div>
-                        
-                        {/* Status */}
-                        {isEditing && (
-                            <div className='flex justify-between items-center'>
-                                <label htmlFor="status" className="text-xs font-medium text-blue-300">Estado:</label>
-                                <select 
-                                    name="status" 
-                                    id="status" 
-                                    value={formData.status || 'Pagada'} 
-                                    onChange={handleChange} 
-                                    disabled={isLoading}
-                                    className="bg-gray-900 border border-gray-600 rounded-lg px-2 py-0.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-xs"
-                                >
-                                    <option>Pagada</option>
-                                    <option>Cancelada</option>
-                                </select>
-                            </div>
-                        )}
-                        
-                        {/* Botón Guardar/Crear */}
-                        <div className="flex justify-end pt-1">
-                            <button 
-                                type="submit" 
-                                disabled={isLoading || productos.length === 0 || (formData.status === 'Pagada' && numericMontoRecibido < totalVenta)} 
-                                className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors font-semibold text-base disabled:opacity-50"
-                            >
-                                {isLoading ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Registrar Venta')}
-                            </button>
+
+                            {isEditing && (
+                                <div className='mt-2 flex justify-between items-center'>
+                                    <label htmlFor="status" className="text-xs font-medium text-blue-300">Estado:</label>
+                                    <select 
+                                        name="status" 
+                                        id="status" 
+                                        value={formData.status || 'Pagada'} 
+                                        onChange={handleChange} 
+                                        disabled={isLoading}
+                                        className="bg-gray-900 border border-gray-600 rounded-lg px-2 py-0.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-xs"
+                                    >
+                                        <option>Pagada</option>
+                                        <option>Cancelada</option>
+                                    </select>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </form>
 
                 {/* Columna Derecha: Keypad (FLEXIBLE Y AMPLIADA) */}
-                <aside className="mt-4 md:mt-0 md:flex-1 md:w-1/2 flex flex-col">
+                <aside className="mt-4 md:mt-0 md:flex-1 md:w-1/2 w-full flex flex-col">
                     <div className="p-3 bg-gray-900/60 rounded-xl border border-gray-700 h-full flex flex-col">
-                        <div className="mb-3 text-right">
+                            <div className="mb-3 text-right">
                             <div className="text-xs text-gray-300">{keypadTarget?.type === 'monto' ? 'Monto' : 'Cantidad'}:</div>
-                            <div className="text-4xl font-mono text-white break-all">{keypadValue || '0'}</div>
+                            <div className="text-3xl sm:text-4xl font-mono text-white break-all">{keypadValue || '0'}</div>
                         </div>
 
-                        {/* Quick presets (Añadir + y $) */}
-                        <div className="flex gap-1 mb-2">
-                             {/* Botones +1, +5, +10 (Lógica de SUMA corregida) */}
-                            {[1,5,10].map(a => (
-                                <button key={a} type="button" onClick={() => handlePresetPress(a, false)} className="flex-1 py-2 bg-gray-700 rounded text-white font-semibold text-base">+{a}</button>
-                            ))}
-                             {/* Botones $20, $50, $100 (Lógica de SUMA corregida) */}
-                            {keypadTarget?.type === 'monto' && [20,50,100].map(a => (
-                                <button key={a} type="button" onClick={() => handlePresetPress(a, true)} className="flex-1 py-2 bg-blue-600 rounded text-white font-semibold text-base">${a}</button>
-                            ))}
-                        </div>
+                        {/* Keypad component: presets + grid (accessible, keyboard support) */}
+                        <div className="flex-1">
+                            <Keypad
+                                keypadTarget={keypadTarget}
+                                keypadValue={keypadValue}
+                                onKeyPress={(k) => keypadPress(k)}
+                                onAccept={() => {
+                                    // Mantener la validación de stock antes de aplicar el valor
+                                    if (keypadTarget?.type === 'cantidad') {
+                                        const idx = keypadTarget.index;
+                                        const prod = productos[idx];
+                                        if (!prod) return; // seguridad
+                                        const nuevaCantidad = parseInt(keypadValue) || 0;
 
-                        <div className="grid grid-cols-4 gap-2 flex-1">
-                             {/* Se ha ELIMINADO el botón '000' de esta lista. */}
-                            {['1','2','3', '←', '4','5','6', 'C', '7','8','9', keypadTarget?.type === 'monto' ? '.' : '00', '0', 'Aceptar'].map((k) => (
-                                <button key={k} type="button" 
-                                    onClick={() => {
-                                        if (k === 'Aceptar') {
-                                             // Validación final antes de cerrar keypad y aplicar
-                                            if (keypadTarget?.type === 'cantidad') {
-                                                const idx = keypadTarget.index;
-                                                const prod = productos[idx];
-                                                if (!prod) return; // Seguridad extra
-                                                const nuevaCantidad = parseInt(keypadValue) || 0;
+                                        const otrosItemsMismoProducto = productos.filter((p, i) => i !== idx && p.productoId === prod.productoId).reduce((sum, p) => sum + p.cantidad, 0);
+                                        const cantidadTotalFinal = otrosItemsMismoProducto + nuevaCantidad;
+                                        const productoInventario = productosInventario.find(p => p.id === prod.productoId);
+                                        const stockDisponible = parseInt(productoInventario?.stock) || 0;
 
-                                                const otrosItemsMismoProducto = productos.filter((p, i) => i !== idx && p.productoId === prod.productoId).reduce((sum, p) => sum + p.cantidad, 0);
-                                                const cantidadTotalFinal = otrosItemsMismoProducto + nuevaCantidad;
-                                                const productoInventario = productosInventario.find(p => p.id === prod.productoId);
-                                                const stockDisponible = parseInt(productoInventario?.stock) || 0;
-
-                                                if (stockDisponible < cantidadTotalFinal && nuevaCantidad > 0) {
-                                                    showErrorToast(`Stock insuficiente (${stockDisponible} disp.) para ${prod.nombre}.`);
-                                                    return; // No aplicar si no hay stock
-                                                }
-                                            }
-                                            applyKeypadValue(keypadValue);
-                                        } else {
-                                             // Para todos los demás botones, usar la lógica de keypadPress
-                                            keypadPress(k);
+                                        if (stockDisponible < cantidadTotalFinal && nuevaCantidad > 0) {
+                                            showErrorToast(`Stock insuficiente (${stockDisponible} disp.) para ${prod.nombre}.`);
+                                            return; // No aplicar si no hay stock
                                         }
-                                    }} 
-                                    className={`py-4 bg-gray-800 rounded text-white text-2xl shadow-md transition-colors 
-                                        ${k === 'Aceptar' ? 'col-span-4 bg-green-600 hover:bg-green-500' : 
-                                        (k === 'C' || k === '←' ? 'bg-red-600 hover:bg-red-500' : 'hover:bg-gray-700')
-                                    }`}
-                                >
-                                    {k}
-                                </button>
-                            ))}
+                                    }
+                                    applyKeypadValue(keypadValue);
+                                }}
+                                onPresetPress={(amount, isCurrency) => handlePresetPress(amount, isCurrency)}
+                            />
                         </div>
                     </div>
                 </aside>
