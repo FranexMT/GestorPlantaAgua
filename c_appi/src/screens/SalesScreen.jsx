@@ -44,7 +44,7 @@ const StatusBadge = ({ status }) => {
     );
 };
 
-// --- TERMINAL DE VENTA (ULTRA COMPACTA CON LÓGICA DE SUMA CORREGIDA) ---
+// --- TERMINAL DE VENTA (Se mantiene igual) ---
 const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onClearSelection }) => {
     const [formData, setFormData] = useState({});
     const [productos, setProductos] = useState([]);
@@ -153,9 +153,9 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
             const stockDisponible = parseInt(productoInventario?.stock) || 0;
             
             if (stockDisponible < cantidadTotalFinal && nuevaCantidad > 0) {
-                 // Esto no debería suceder si la validación del botón "Aceptar" funciona, pero es un fallback.
-                 setErrorInventario(`Error: Stock insuficiente (${stockDisponible} disp.).`);
-                 return;
+                // Esto no debería suceder si la validación del botón "Aceptar" funciona, pero es un fallback.
+                setErrorInventario(`Error: Stock insuficiente (${stockDisponible} disp.).`);
+                return;
             }
 
             const nuevos = [...productos];
@@ -438,14 +438,14 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
         }
 
         // Validar stock una última vez antes de guardar
-         for (const item of productos) {
-             const productoInventario = productosInventario.find(p => p.id === item.productoId);
-             const stockDisponible = parseInt(productoInventario?.stock) || 0;
-             if (stockDisponible < item.cantidad) {
-                 showErrorToast(`Stock insuficiente para ${item.nombre} al guardar. Disponible: ${stockDisponible}`);
-                 return; // Detener guardado
-             }
-         }
+          for (const item of productos) {
+              const productoInventario = productosInventario.find(p => p.id === item.productoId);
+              const stockDisponible = parseInt(productoInventario?.stock) || 0;
+              if (stockDisponible < item.cantidad) {
+                  showErrorToast(`Stock insuficiente para ${item.nombre} al guardar. Disponible: ${stockDisponible}`);
+                  return; // Detener guardado
+              }
+          }
 
 
         const ventaCompleta = {
@@ -673,7 +673,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                         </div>
 
                         <div className="grid grid-cols-4 gap-2 flex-1">
-                            {/* Se ha ELIMINADO el botón '000' de esta lista. */}
+                             {/* Se ha ELIMINADO el botón '000' de esta lista. */}
                             {['1','2','3', '←', '4','5','6', 'C', '7','8','9', keypadTarget?.type === 'monto' ? '.' : '00', '0', 'Aceptar'].map((k) => (
                                 <button key={k} type="button" 
                                     onClick={() => {
@@ -697,7 +697,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                                             }
                                             applyKeypadValue(keypadValue);
                                         } else {
-                                            // Para todos los demás botones, usar la lógica de keypadPress
+                                             // Para todos los demás botones, usar la lógica de keypadPress
                                             keypadPress(k);
                                         }
                                     }} 
@@ -716,8 +716,6 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
         </div>
     );
 };
-
-
 // --- MODAL DE DETALLES (Se mantiene igual) ---
 const SaleDetailsModal = ({ isOpen, onClose, sale }) => {
      if (!isOpen || !sale) return null;
@@ -818,7 +816,7 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, children, saleId }) =
                     <button onClick={onClose} className="p-1 rounded-full text-gray-400 bg-[#1a1a1a] hover:text-white transition-colors"><X size={20} /></button>
                 </div>
                 <div className="p-6 text-gray-300">
-                    <p className='text-white'>{children} (ID: <span className="font-mono text-red-300">{saleId}</span>)</p>
+                    <p className='text-white'>{children} {saleId && (<span>(ID: <span className="font-mono text-red-300">{saleId}</span>)</span>)}</p>
                 </div>
                 <div className="flex justify-end gap-3 p-4 bg-gray-900/50 rounded-b-xl">
                     <button
@@ -849,6 +847,10 @@ export default function SalesScreen() {
     const [detailsSale, setDetailsSale] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
 
+    // Nuevo estado para el modal de eliminar TODO
+    const [isConfirmDeleteAllOpen, setIsConfirmDeleteAllOpen] = useState(false);
+    
+    // Estado para modal de eliminar una venta
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [saleToDelete, setSaleToDelete] = useState(null);
 
@@ -858,13 +860,15 @@ export default function SalesScreen() {
         error,
         addVenta,
         updateVenta,
-        deleteVenta
+        deleteVenta,
+        deleteAllVentas // Asumiendo que has añadido esta función a useVentas
     } = useVentas();
 
     const {
         productos: productosInventario,
         loading: loadingProductos,
-        updateProducto
+        updateProducto,
+        updateMultipleProductos // Asumiendo que has añadido esta función a useProductos
     } = useProductos();
 
     const handleClearSelection = useCallback(() => {
@@ -952,11 +956,48 @@ export default function SalesScreen() {
         setSaleToDelete(venta);
         setIsConfirmModalOpen(true);
     };
+    
+    // Función para abrir el modal de eliminar todo
+    const handleDeleteAllClick = () => {
+        if (ventas.length === 0) {
+            showErrorToast("No hay ventas para eliminar.");
+            return;
+        }
+        setIsConfirmDeleteAllOpen(true);
+    };
 
+    // Función modificada: BORRA TODAS LAS VENTAS PERO OMITE LA REVERSIÓN DE STOCK
+    const handleConfirmDeleteAll = async () => {
+        setIsConfirmDeleteAllOpen(false);
+        try {
+            // ELIMINAMOS LA LÓGICA DE REVERSIÓN DE STOCK. 🚫
+            
+            // 1. Eliminar todas las ventas
+            // Si tu hook useVentas no tiene deleteAllVentas, tendrás que iterar y llamar a deleteVenta
+            if (deleteAllVentas) {
+                 await deleteAllVentas(); // Asumiendo que esta función existe en useVentas
+            } else {
+                 // Opción de fallback si deleteAllVentas no existe
+                 for (const sale of ventas) {
+                    await deleteVenta(sale.id);
+                 }
+            }
+           
+            
+            showSuccessToast(`Todas las ventas (${ventas.length}) han sido eliminadas. El stock actual NO fue afectado.`);
+            handleClearSelection(); 
+
+        } catch (err) {
+            showErrorToast('Error al eliminar todas las ventas: ' + err.message);
+        }
+    };
+
+    // La función de eliminar una sola venta SÍ debe revertir el stock (se mantiene igual)
     const handleConfirmDelete = async () => {
         const deletedSaleId = saleToDelete.id; 
         if (saleToDelete) {
             try {
+                // Revertir el stock antes de eliminar (ESTO SE MANTIENE PARA ELIMINAR UNA SOLA VENTA)
                 for (const item of saleToDelete.items) {
                     const producto = productosInventario.find(p => p.id === item.productoId);
                     if (producto) {
@@ -965,6 +1006,7 @@ export default function SalesScreen() {
                         await updateProducto(item.productoId, { ...producto, stock: nuevoStock });
                     }
                 }
+                
                 await deleteVenta(saleToDelete.id);
                 
                 showSuccessToast(`Venta ${deletedSaleId} eliminada y stock revertido correctamente.`);
@@ -985,15 +1027,18 @@ export default function SalesScreen() {
             let stockChanges = {}; 
 
             if (originalSale) {
+                // 1. Revertir el stock de la venta original
                 for (const item of originalSale.items) {
                     stockChanges[item.productoId] = (stockChanges[item.productoId] || 0) + item.cantidad;
                 }
             }
 
+            // 2. Aplicar el stock de la nueva venta (o editada)
             for (const item of newSaleData.items) {
                 stockChanges[item.productoId] = (stockChanges[item.productoId] || 0) - item.cantidad;
             }
             
+            // 3. Aplicar los cambios de stock en el inventario
             for (const [productoId, change] of Object.entries(stockChanges)) {
                 if (change !== 0) {
                     const producto = productosInventario.find(p => p.id === productoId);
@@ -1010,6 +1055,7 @@ export default function SalesScreen() {
                 }
             }
 
+            // 4. Guardar la venta
             if (originalSale) {
                 await updateVenta(originalSale.id, newSaleData);
             } else {
@@ -1052,6 +1098,7 @@ export default function SalesScreen() {
                 sale={detailsSale}
             />
             
+            {/* Modal de confirmación para eliminar una venta */}
             <ConfirmModal
                 isOpen={isConfirmModalOpen}
                 onClose={() => setIsConfirmModalOpen(false)}
@@ -1060,6 +1107,16 @@ export default function SalesScreen() {
                 saleId={saleToDelete?.id}
             >
                 ¿Estás seguro de que quieres **eliminar** esta venta? Se **revertirá** el inventario de los productos asociados.
+            </ConfirmModal>
+
+            {/* Nuevo Modal de confirmación para eliminar TODO */}
+            <ConfirmModal
+                isOpen={isConfirmDeleteAllOpen}
+                onClose={() => setIsConfirmDeleteAllOpen(false)}
+                onConfirm={handleConfirmDeleteAll}
+                title="ELIMINAR TODO EL HISTORIAL"
+            >
+                ⚠️ **¡ADVERTENCIA!** Estás a punto de **eliminar PERMANENTEMENTE** todas las ventas registradas. Esta acción es **IRREVERSIBLE**. ¿Deseas continuar?
             </ConfirmModal>
 
             {/* -------------------------------------------------------- */}
@@ -1088,13 +1145,23 @@ export default function SalesScreen() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <button 
-                    onClick={handleExportData} 
-                    className="flex items-center gap-2 relative p-2 font-semibold leading-6 text-white border border-blue-600 bg-[#1a1a1a] shadow-2xl cursor-pointer rounded-xl transition-transform duration-300 ease-in-out hover:scale-[1.02] active:scale-[0.98] hover:bg-gray-700/50 w-full md:w-auto justify-center"
-                >
-                    <Download size={25} />
-                    Exportar Historial
-                </button>
+                <div className='flex gap-4 w-full md:w-auto'>
+                    <button 
+                        onClick={handleExportData} 
+                        className="flex items-center gap-2 relative p-2 font-semibold leading-6 text-white border border-blue-600 bg-[#1a1a1a] shadow-2xl cursor-pointer rounded-xl transition-transform duration-300 ease-in-out hover:scale-[1.02] active:scale-[0.98] hover:bg-gray-700/50 flex-1 md:flex-none justify-center"
+                    >
+                        <Download size={25} />
+                        Exportar Historial
+                    </button>
+                    {/* Botón para Eliminar Todo */}
+                    <button 
+                        onClick={handleDeleteAllClick} 
+                        className="flex items-center gap-2 relative p-2 font-semibold leading-6 text-white border border-red-600 bg-red-800/30 shadow-2xl cursor-pointer rounded-xl transition-transform duration-300 ease-in-out hover:scale-[1.02] active:scale-[0.98] hover:bg-red-800/50 flex-1 md:flex-none justify-center"
+                    >
+                        <Trash2 size={25} />
+                        Eliminar Todo
+                    </button>
+                </div>
             </div>
 
             {error && (
