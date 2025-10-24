@@ -1,67 +1,109 @@
 import React, { useState } from 'react';
 
 export default function LoginScreen({ onLogin }) {
-  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
   const role = 'employee'; // Rol fijo para la base de datos
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    if (!name.trim()) return;
-    onLogin({ name: name.trim(), role });
+    setError('');
+    if (!email.trim() || !password) return setError('Introduce email y contraseña');
+    // Local login (no Firebase): accept the credentials locally for testing
+    setLoading(true)
+    try {
+      const uid = 'local-' + Date.now()
+      onLogin({ name: email.trim(), uid, role })
+    } catch (err) {
+      console.error('Local login error', err)
+      setError('Error iniciando sesión')
+    } finally {
+      setLoading(false)
+    }
   }
 
+  // Firebase/Firestore integration removed from this component.
+  // If you need to fetch a profile from Firestore, re-add the helper here.
+
   return (
-    // Fondo más profundo (bg-gray-950) para un contraste más dramático
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 font-sans p-4">
-      
-      {/* 1. Contenedor Principal: Estilo "Dark Card" con un borde de gradiente sutil. */}
-      {/* Usamos 'relative' para posicionar el gradiente y 'p-0.5' para que actúe como borde. */}
-      <div className="relative p-0.5 rounded-2xl shadow-2xl bg-gradient-to-br from-indigo-500/80 to-purple-500/80">
-        
-        {/* 2. Formulario Interno: El verdadero contenido, fondo ultra-oscuro */}
+  // Fondo adaptado a la paleta "planta de agua": tonos azules y verdes suaves
+  <div className="min-h-screen flex items-center justify-center animated-water-bg text-slate-100 font-sans p-4">
+
+      {/* Contenedor Principal: borde de gradiente aqua -> azul profundo */}
+      <div className="relative p-0.5 rounded-2xl shadow-2xl bg-gradient-to-br from-teal-500/80 to-sky-700/80">
+
+        {/* Formulario Interno: fondo oscuro neutro para resaltar los acentos azules/verde-agua */}
         <form 
           onSubmit={handleSubmit} 
-          className="w-full max-w-sm p-10 bg-gray-900 rounded-2xl"
+          className="relative z-10 w-full max-w-sm p-10 bg-slate-800 rounded-2xl"
         >
-          
-          {/* Título: Fuente grande, gradiente de color */}
-          <h2 className="text-4xl font-extrabold mb-10 text-center tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
-            Bienvenido
+
+          {/* Título: gradiente inspirado en agua */}
+          <h2 className="text-4xl font-extrabold mb-8 text-center tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-sky-300 to-teal-200">
+            EL MANANTIAL
           </h2>
 
-          {/* --- Campo Nombre --- */}
-          <div className="mb-8">
-            <label className="block text-gray-400 text-sm font-medium mb-3">
-              Nombre de Usuario
+          {/* Subtítulo / descripción pequeña */}
+          <p className="text-center text-sm text-slate-300 mb-6">Accede con tu identificador</p>
+
+          {/* Email */}
+          <div className="mb-4">
+            <label className="block text-slate-300 text-sm font-medium mb-2" htmlFor="email">
+                Usuario
             </label>
             <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              // Input mejorado: Esquinas redondeadas, efecto de 'glassmorphism' sutil
-              className="w-full px-4 py-3 border border-gray-700 bg-gray-800/50 text-white rounded-xl placeholder-gray-500 transition duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner"
-              placeholder="Introduce tu identificador"
+              id="email"
+                type="text"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-3 border border-slate-700 bg-slate-700 text-slate-100 rounded-lg placeholder-slate-400 transition duration-200 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 shadow-inner"
+                placeholder="usuario"
               required
               autoFocus
+              aria-label="Email"
             />
           </div>
 
-          {/* --- Botón de Entrar: Ahora con un gradiente vibrante y animación de presión --- */}
+          {/* Password */}
+          <div className="mb-6">
+            <label className="block text-slate-300 text-sm font-medium mb-2" htmlFor="password">
+              Contraseña
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-slate-700 bg-slate-700 text-slate-100 rounded-lg placeholder-slate-400 transition duration-200 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 shadow-inner"
+              placeholder="Contraseña"
+              required
+              aria-label="Contraseña"
+            />
+          </div>
+
+          {/* Botón de Entrar: gradiente agua -> azul, alto contraste y accesible */}
           <button 
             type="submit" 
-            disabled={!name.trim()}
-            // Gradiente para el color principal
-            className={`w-full py-3 rounded-xl text-white font-bold text-lg tracking-wider transition duration-300 ease-in-out transform shadow-xl active:scale-[0.98] ${
-              name.trim() 
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 focus:ring-4 focus:ring-purple-500 focus:ring-opacity-50'
-                : 'bg-gray-700 cursor-not-allowed shadow-none' // Estado deshabilitado
+            disabled={loading}
+            aria-disabled={loading}
+            className={`w-full py-3 rounded-lg text-white font-semibold text-lg tracking-wide transition duration-200 ease-in-out transform shadow-md active:scale-98 ${
+              !loading
+                ? 'bg-gradient-to-r from-teal-500 to-sky-600 hover:from-teal-400 hover:to-sky-500 focus:ring-4 focus:ring-teal-400/40'
+                : 'bg-slate-600 cursor-not-allowed opacity-70 shadow-none'
             }`}
           >
-            Entrar al Sistema
+            {loading ? 'Entrando...' : 'Entrar'}
           </button>
-          
-          {/* Texto de pie con un espaciado más limpio */}
-          <p className="text-center text-xs text-gray-500 mt-8">
-              Tu acceso es seguro y validado.
+
+          {error && (
+            <p className="text-center text-sm text-red-400 mt-4">{error}</p>
+          )}
+
+          <p className="text-center text-xs text-slate-400 mt-6">
+              Acceso seguro · Planta de tratamiento
           </p>
 
         </form>
