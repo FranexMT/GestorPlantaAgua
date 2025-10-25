@@ -26,8 +26,8 @@ export const useVentas = () => {
     }
   };
 
-  
-const handleAddVenta = async (ventaData) => {
+
+  const handleAddVenta = async (ventaData) => {
     try {
       setError(null);
       const nuevaVenta = await createVenta(ventaData);
@@ -59,7 +59,7 @@ const handleAddVenta = async (ventaData) => {
   };
 
   // Eliminar venta
-    const handleDeleteVenta = async (ventaId) => {
+  const handleDeleteVenta = async (ventaId) => {
     try {
       setError(null);
       await deleteVenta(ventaId);
@@ -70,7 +70,7 @@ const handleAddVenta = async (ventaData) => {
       throw err;
     }
   };
-  
+
   // Cargar ventas al montar el componente
   useEffect(() => {
     fetchVentas();
