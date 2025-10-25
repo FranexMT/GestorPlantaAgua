@@ -68,3 +68,44 @@ button:focus-visible {
   }
   
 }
+
+/* Animated water gradient for login background */
+.animated-water-bg {
+  /* fallback color (darker navy) */
+  background-color: #001f3f;
+  /* darker blue palette for a deeper 'planta de agua' look */
+  background-image: linear-gradient(270deg, #001f3f 0%, #012a4a 25%, #023e8a 50%, #014b7a 75%, #002733 100%);
+  background-size: 800% 800%;
+  /* faster, smooth looping of the background gradient */
+  animation: gradientShift 10s linear infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  25% { background-position: 50% 50%; }
+  50% { background-position: 100% 50%; }
+  75% { background-position: 50% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Slight overlay helper in case the gradient is vivid */
+.bg-overlay-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 20, 30, 0.28);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Static gradient border helper (replaces rotating border) */
+.static-border {
+  position: relative;
+  border-radius: inherit;
+}
+.static-border > .static-border-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}

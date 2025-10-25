@@ -169,17 +169,28 @@ export default function App() {
     };
 
     const handleSaveProduct = async (productId, productData) => {
-        try {
-            if (productId) {
-                await updateProducto(productId, productData);
+    try {
+        if (productId) {
+            const result = await updateProducto(productId, productData);
+            if (result.success) {
+                toast('Producto actualizado correctamente', { type: 'success' });
             } else {
-                await addProducto(productData);
+                toast(result.message || 'Error al actualizar producto', { type: 'error' });
             }
-        } catch (e) {
-            console.error("Error al guardar producto:", e);
-            toast(`Error al guardar: ${e.message}`, { type: 'error' });
+        } else {
+        const result = await addProducto(productData);
+        if (!result.success) {
+            toast(result.message || 'El producto ya existe', { type: 'error' });
+            return; 
         }
+        toast('Producto agregado correctamente', { type: 'success' });
+        }
+    } catch (e) {
+        console.error('Error al guardar producto:', e);
+        toast(`Error al guardar: ${e.message}`, { type: 'error' });
+    }
     };
+
 
     const handleDeleteProduct = (productId) => {
         setProductToDelete(productId);
@@ -248,8 +259,33 @@ export default function App() {
                 </div>
             </div>
 
-            <div className="bg-gray-800/80 rounded-xl shadow-2xl border border-blue-700/30 overflow-x-auto">
-                <table className="w-full text-left text-gray-300">
+            {/* Mobile: card list */}
+            <div className="sm:hidden space-y-3">
+                {filteredData.map(product => (
+                    <div key={product.id} className="bg-gray-900/60 rounded-lg border border-gray-700 p-3 flex items-center justify-between">
+                        <div className="min-w-0">
+                            <p className="font-semibold text-gray-100 truncate">{product.nombre}</p>
+                            <p className="text-xs text-gray-400">ID: <span className="font-mono text-gray-300">{product.id}</span></p>
+                            <p className="text-xs text-gray-400">{product.categoria} · <span className="text-green-400">{product.stock} unidades</span></p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => handleOpenModal({ id: product.id, name: product.nombre, stock: product.stock, price: product.precio, categoria: product.categoria })} className="p-2 bg-[#1a1a1a] rounded text-blue-400">
+                                <Edit size={16} />
+                            </button>
+                            <button onClick={() => handleDeleteProduct(product.id)} className="p-2 bg-red-800/30 rounded text-red-400">
+                                <Archive size={16} />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+                {filteredData.length === 0 && (
+                    <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700 text-center text-gray-400">No hay productos que coincidan con la búsqueda.</div>
+                )}
+            </div>
+
+            {/* Desktop/Tablet: table */}
+            <div className="hidden sm:block bg-gray-800/80 rounded-xl shadow-2xl border border-blue-700/30 overflow-x-auto">
+                <table className="min-w-[900px] w-full text-left text-gray-300 table-auto">
                     <thead className="bg-gray-700/50 backdrop-blur-sm sticky top-0">
                         <tr>
                             <th className="p-4 font-semibold text-blue-400">ID Producto</th>
@@ -273,10 +309,10 @@ export default function App() {
                             return (
                                 <tr
                                     key={product.id}
-                                    className={`border-b border-gray-700 ${rowClass} hover:!bg-gray-700 transition-colors`}
+                                    className={`border-b border-gray-700 ${rowClass} hover:bg-gray-700! transition-colors`}
                                 >
                                     <td className="p-4 text-sm font-mono text-gray-400">{product.id}</td>
-                                    <td className="p-4 text-sm font-medium text-gray-100">{product.nombre}</td>
+                                    <td className="p-4 text-sm font-medium text-gray-100 truncate max-w-[280px]">{product.nombre}</td>
                                     <td className="p-4 text-sm text-gray-400">{product.categoria}</td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${stockBadgeClasses}`}>
