@@ -64,6 +64,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
     });
     
     const isEditing = currentSale !== null;
+    const montoInputRef = React.useRef(null);
 
     useEffect(() => {
         const newSaleId = `VTA-${Date.now()}`; 
@@ -478,8 +479,11 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
             setMontoRecibido('');
             setErrorInventario('');
             setProductQuery('');
-            setKeypadTarget(null);
+            // Mantener el keypad activo en 'monto' y limpiar su valor
+            setKeypadTarget({ type: 'monto' });
             setKeypadValue('');
+            // Enfocar el input de monto si existe
+            try { montoInputRef?.current?.focus(); } catch(e) {}
         };
 
         // Si fue creación nueva, limpiamos; si se estaba editando, mostramos la venta editada en pantalla
@@ -657,6 +661,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                                                 type="text" 
                                                 name="montoRecibido" 
                                                 id="montoRecibido" 
+                                                ref={montoInputRef}
                                                 value={montoRecibido} 
                                                 onChange={(e) => setMontoRecibido(e.target.value)} 
                                                 required 

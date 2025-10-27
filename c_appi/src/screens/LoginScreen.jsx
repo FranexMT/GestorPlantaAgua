@@ -97,7 +97,7 @@ export default function LoginScreen({ onLogin, onRegister }) {
           </div>
 
           {/* Subtítulo: Cambiado a blanco (text-white) */}
-          <p className="text-center text-sm text-white mb-6">Acceso a Planta de Agua Purificada y Hielo</p>
+          {/* <p className="text-center text-sm text-white mb-6">Acceso a Planta de Agua Purificada y Hielo</p> */}
 
           {/* Email */}
           <div className="mb-4">
