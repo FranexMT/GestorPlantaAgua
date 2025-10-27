@@ -4,6 +4,9 @@ import {
   signInWithEmailAndPassword,
 } from "firebase/auth";
 
+
+import ElManantialLogo from '../img/man.png';
+
 export default function LoginScreen({ onLogin, onRegister }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,33 +16,33 @@ export default function LoginScreen({ onLogin, onRegister }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
+
     if (!email.trim() || !password) {
       return setError('Introduce email y contraseña');
     }
 
     setLoading(true);
-    
+
     try {
       // Autenticar con Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
+
       console.log('Usuario autenticado:', user);
-      
+
       // Llamar a onLogin para actualizar el estado en App
-      onLogin({ 
-        name: user.email, 
+      onLogin({
+        name: user.email,
         uid: user.uid,
-        role: 'employee' // Puedes obtener el rol de Firestore si lo almacenas ahí
+        role: 'employee' // Rol por defecto, se puede obtener de Firestore
       });
-      
+
     } catch (err) {
       console.error("Error completo al iniciar sesión:", err);
       console.error("Código de error:", err.code);
       console.error("Mensaje de error:", err.message);
-      
-      // Mensajes de error más específicos
+
+      // Mensajes de error más específicos basados en códigos de Firebase Auth
       switch (err.code) {
         case 'auth/invalid-email':
           setError('Email inválido. Verifica el formato del correo.');
@@ -71,30 +74,34 @@ export default function LoginScreen({ onLogin, onRegister }) {
   };
 
   return (
-    // Fondo adaptado a la paleta "planta de agua": tonos azules y verdes suaves
-    
+    // Contenedor principal con fondo de temática de agua
     <div className="min-h-screen flex items-center justify-center animated-water-bg text-slate-100 font-sans p-4">
-      {/* Contenedor Principal: borde de gradiente aqua -> azul profundo */}
-      
-      <div className="relative p-0.5 rounded-2xl shadow-2xl bg-linear-to-br from-teal-500/80 to-sky-700/80">
 
-        {/* Formulario Interno: fondo oscuro neutro para resaltar los acentos azules/verde-agua */}
+      {/* 1. Contenedor exterior: Usa el color #1C3156 */}
+      <div className="relative p-0.5 rounded-2xl shadow-2xl bg-[#1C3156]">
+
+        {/* 2. Formulario Interno: Usa el color #1C3156 */}
         <form
           onSubmit={handleSubmit}
-          className="relative z-10 w-full max-w-sm sm:max-w-md p-8 sm:p-10 bg-slate-800 rounded-2xl"
+          // Fondo del formulario al color #1C3156
+          className="relative z-10 w-full max-w-sm sm:max-w-md p-8 sm:p-10 bg-[#1C3156] rounded-2xl"
         >
 
-          {/* Título: gradiente inspirado en agua */}
-          <h2 className="text-3xl sm:text-4xl font-extrabold mb-8 text-center tracking-tight bg-clip-text text-transparent bg-linear-to-r from-sky-300 to-teal-200">
-            EL MANANTIAL
-          </h2>
+          {/* LOGO INTEGRADO */}
+          <div className="flex justify-center flex-col items-center mb-4">
+            <img
+              src={ElManantialLogo} // Uso de la variable importada
+              alt="Logo El Manantial"
+              className="w-48 h-auto sm:w-64 object-contain"
+            />
+          </div>
 
-          {/* Subtítulo / descripción pequeña */}
-          <p className="text-center text-sm text-slate-300 mb-6">Accede con tu identificador</p>
+          {/* Subtítulo: Cambiado a blanco (text-white) */}
+          <p className="text-center text-sm text-white mb-6">Acceso a Planta de Agua Purificada y Hielo</p>
 
           {/* Email */}
           <div className="mb-4">
-            <label className="block text-slate-300 text-sm font-medium mb-2" htmlFor="email">
+            <label className="block text-slate-100 text-sm font-medium mb-2" htmlFor="email">
               Email
             </label>
             <input
@@ -102,7 +109,8 @@ export default function LoginScreen({ onLogin, onRegister }) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-700 bg-slate-700 text-slate-100 rounded-lg placeholder-slate-400 transition duration-200 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 shadow-inner"
+              // Campos de input: Usa el mismo color #1C3156 para eliminar el contraste.
+              className="w-full px-4 py-3 border border-transparent bg-[#334b74] text-slate-100 rounded-lg placeholder-slate-400 transition duration-200 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 shadow-inner"
               placeholder="correo@ejemplo.com"
               required
               autoFocus
@@ -112,7 +120,7 @@ export default function LoginScreen({ onLogin, onRegister }) {
 
           {/* Password */}
           <div className="mb-6">
-            <label className="block text-slate-300 text-sm font-medium mb-2" htmlFor="password">
+            <label className="block text-slate-100 text-sm font-medium mb-2" htmlFor="password">
               Contraseña
             </label>
             <input
@@ -120,21 +128,22 @@ export default function LoginScreen({ onLogin, onRegister }) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-700 bg-slate-700 text-slate-100 rounded-lg placeholder-slate-400 transition duration-200 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 shadow-inner"
+              // Campos de input: Usa el mismo color #1C3156 para eliminar el contraste.
+              className="w-full px-4 py-3 border border-transparent bg-[#334b74] text-slate-100 rounded-lg placeholder-slate-400 transition duration-200 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400 shadow-inner"
               placeholder="Contraseña"
               required
               aria-label="Contraseña"
             />
           </div>
 
-          {/* Botón de Entrar: gradiente agua -> azul, alto contraste y accesible */}
+          {/* Botón de Entrar */}
           <button
             type="submit"
             disabled={loading}
             aria-disabled={loading}
             className={`w-full py-3 rounded-lg text-white font-semibold text-lg tracking-wide transition duration-200 ease-in-out transform shadow-md active:scale-98 ${!loading
-                ? 'bg-gradient-to-r from-teal-500 to-sky-600 hover:from-teal-400 hover:to-sky-500 focus:ring-4 focus:ring-teal-400/40'
-                : 'bg-slate-600 cursor-not-allowed opacity-70 shadow-none'
+              ? 'bg-gradient-to-r from-teal-500 to-sky-600 hover:from-teal-400 hover:to-sky-500 focus:ring-4 focus:ring-teal-400/40'
+              : 'bg-slate-600 cursor-not-allowed opacity-70 shadow-none'
               }`}
           >
             {loading ? 'Entrando...' : 'Entrar'}
@@ -155,7 +164,7 @@ export default function LoginScreen({ onLogin, onRegister }) {
           )}
 
           <p className="text-center text-xs text-slate-400 mt-6">
-            Acceso seguro · Planta de tratamiento
+            Acceso seguro · Sistema de Gestión
           </p>
 
         </form>
