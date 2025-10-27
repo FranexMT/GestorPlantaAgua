@@ -1,7 +1,9 @@
+//inventario
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Search, Edit, Archive } from 'lucide-react';
 import { useProductos } from '../hooks/useProductos'; // Asegúrate de que la ruta sea correcta
 import { toast } from 'react-toastify';
+import { enviarNotificacionStockBajo } from '../Services/emailServices';
 
 const ProductModal = ({ isOpen, onClose, onSave, product }) => {
     const [formData, setFormData] = useState({ name: '', stock: '', price: '', categoria: '' });
@@ -170,8 +172,19 @@ export default function App() {
 
     const handleSaveProduct = async (productId, productData) => {
     try {
+        const umbralStockBajo = 10;
         if (productId) {
+             // Obtener el stock original antes de la actualización
+            const stockOriginal = editingProduct ? editingProduct.stock : undefined;
             const result = await updateProducto(productId, productData);
+            // Comprobar si el stock ha caído por debajo del umbral
+            if (productData.stock < umbralStockBajo && (stockOriginal === undefined || stockOriginal >= umbralStockBajo)) {
+                console.log(`Stock de "${productData.nombre}" bajo (${productData.stock}). Enviando notificación...`);
+                enviarNotificacionStockBajo({
+                    nombre: productData.nombre,
+                    stock: productData.stock,
+                });
+            }
             if (result.success) {
                 toast('Producto actualizado correctamente', { type: 'success' });
             } else {

@@ -6,6 +6,7 @@ import {
 
 
 import ElManantialLogo from '../img/man.png';
+import { isAdmin } from '../config/roles';
 
 export default function LoginScreen({ onLogin, onRegister }) {
   const [email, setEmail] = useState('');
@@ -30,11 +31,14 @@ export default function LoginScreen({ onLogin, onRegister }) {
 
       console.log('Usuario autenticado:', user);
 
+  // Método simple: determinar rol por email (centralizado)
+  const role = isAdmin(user.email) ? 'admin' : 'employee';
+
       // Llamar a onLogin para actualizar el estado en App
       onLogin({
         name: user.email,
         uid: user.uid,
-        role: 'employee' // Rol por defecto, se puede obtener de Firestore
+        role
       });
 
     } catch (err) {
