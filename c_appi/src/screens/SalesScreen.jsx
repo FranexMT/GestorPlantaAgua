@@ -463,9 +463,29 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
             cambio: cambio
         };
 
-        await onSave(ventaCompleta, currentSale); 
-        
-        onClearSelection(); 
+        await onSave(ventaCompleta, currentSale);
+
+        // Limpiar campos del terminal tras guardar
+        const resetTerminal = () => {
+            const newId = `VTA-${Date.now()}`;
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const localDate = `${yyyy}-${mm}-${dd}`;
+            setFormData({ status: 'Pagada', date: localDate, id: newId });
+            setProductos([]);
+            setMontoRecibido('');
+            setErrorInventario('');
+            setProductQuery('');
+            setKeypadTarget(null);
+            setKeypadValue('');
+        };
+
+        // Si fue creación nueva, limpiamos; si se estaba editando, mostramos la venta editada en pantalla
+        if (!isEditing) resetTerminal();
+
+        onClearSelection();
         
     };
 
