@@ -81,9 +81,15 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
             setProductos(itemsConNumeros || []);
             setMontoRecibido(String(currentSale.montoRecibido || 0)); 
         } else {
+            // Fecha en formato local YYYY-MM-DD para evitar desfases por zona horaria
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const localDate = `${yyyy}-${mm}-${dd}`;
             setFormData({ 
                 status: 'Pagada', 
-                date: new Date().toISOString().split('T')[0],
+                date: localDate,
                 id: newSaleId 
             });
             setProductos([]);
@@ -878,6 +884,10 @@ export default function SalesScreen() {
         updateMultipleProductos // Asumiendo que has añadido esta función a useProductos
     } = useProductos();
 
+    // Obtener funciones de refetch desde los hooks
+    const { refetchVentas } = useVentas();
+    const { refetchProductos } = useProductos();
+
     const handleClearSelection = useCallback(() => {
         setEditingSale(null);
     }, []);
@@ -991,6 +1001,7 @@ export default function SalesScreen() {
             }
            
             
+            try { await refetchVentas(); } catch(e) { console.warn('No se pudo refetch ventas', e); }
             showSuccessToast(`Todas las ventas (${ventas.length}) han sido eliminadas. El stock actual NO fue afectado.`);
             handleClearSelection(); 
 
@@ -1015,7 +1026,9 @@ export default function SalesScreen() {
                 }
                 
                 await deleteVenta(saleToDelete.id);
-                
+                try { await refetchProductos(); } catch(e) { console.warn('No se pudo refetch productos', e); }
+                try { await refetchVentas(); } catch(e) { console.warn('No se pudo refetch ventas', e); }
+
                 showSuccessToast(`Venta ${deletedSaleId} eliminada y stock revertido correctamente.`);
                 
             } catch (err) {
@@ -1068,6 +1081,9 @@ export default function SalesScreen() {
             } else {
                 await addVenta(newSaleData);
             }
+            // Refrescar datos en UI
+            try { await refetchProductos(); } catch(e) { console.warn('No se pudo refetch productos', e); }
+            try { await refetchVentas(); } catch(e) { console.warn('No se pudo refetch ventas', e); }
             
             showSuccessToast(`Venta ${originalSale ? 'actualizada' : 'registrada'} correctamente.`);
 
