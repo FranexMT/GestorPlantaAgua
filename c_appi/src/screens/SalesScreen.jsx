@@ -1,9 +1,11 @@
+//venta
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Plus, Download, Search, Edit, Trash2, Eye, X, ShoppingCart, AlertTriangle, BadgeDollarSign, Star } from 'lucide-react';
 import Keypad from '../components/Keypad';
 import { useVentas } from '../hooks/useVentas';
 import { useProductos } from '../hooks/useProductos';
 import { toast } from 'react-toastify'; 
+import { enviarNotificacionStockBajo } from '../Services/emailServices';
 
 // --- HELPERS DE TOASTIFY (Se mantienen igual) ---
 const showExportToast = () => {
@@ -64,6 +66,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
     });
     
     const isEditing = currentSale !== null;
+    const montoInputRef = React.useRef(null);
 
     useEffect(() => {
         const newSaleId = `VTA-${Date.now()}`; 
@@ -463,9 +466,32 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
             cambio: cambio
         };
 
-        await onSave(ventaCompleta, currentSale); 
-        
-        onClearSelection(); 
+        await onSave(ventaCompleta, currentSale);
+
+        // Limpiar campos del terminal tras guardar
+        const resetTerminal = () => {
+            const newId = `VTA-${Date.now()}`;
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const localDate = `${yyyy}-${mm}-${dd}`;
+            setFormData({ status: 'Pagada', date: localDate, id: newId });
+            setProductos([]);
+            setMontoRecibido('');
+            setErrorInventario('');
+            setProductQuery('');
+            // Mantener el keypad activo en 'monto' y limpiar su valor
+            setKeypadTarget({ type: 'monto' });
+            setKeypadValue('');
+            // Enfocar el input de monto si existe
+            try { montoInputRef?.current?.focus(); } catch(e) {}
+        };
+
+        // Si fue creación nueva, limpiamos; si se estaba editando, mostramos la venta editada en pantalla
+        if (!isEditing) resetTerminal();
+
+        onClearSelection();
         
     };
 
@@ -637,6 +663,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                                                 type="text" 
                                                 name="montoRecibido" 
                                                 id="montoRecibido" 
+                                                ref={montoInputRef}
                                                 value={montoRecibido} 
                                                 onChange={(e) => setMontoRecibido(e.target.value)} 
                                                 required 
@@ -1043,6 +1070,8 @@ export default function SalesScreen() {
     const handleSaveSale = async (newSaleData, originalSale) => {
         try {
             setIsSaving(true);
+            const umbralStockBajo = 6; // Definir el umbral para stock bajo
+
             
             let stockChanges = {}; 
 
@@ -1071,6 +1100,14 @@ export default function SalesScreen() {
                         }
 
                         await updateProducto(productoId, { ...producto, stock: nuevoStock });
+                        // Comprobar si el stock ha caído por debajo del umbral
+                        if (nuevoStock < umbralStockBajo && stockActual >= umbralStockBajo) {
+                            console.log(`Stock de "${producto.nombre}" bajo (${nuevoStock}) tras venta. Enviando notificación...`);
+                            enviarNotificacionStockBajo({
+                                nombre: producto.nombre,
+                                stock: nuevoStock,
+                            });
+                        }
                     }
                 }
             }
