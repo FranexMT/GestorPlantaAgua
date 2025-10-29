@@ -4,7 +4,9 @@ import { Plus, Download, Search, Edit, Trash2, Eye, X, ShoppingCart, AlertTriang
 import Keypad from '../components/Keypad';
 import { useVentas } from '../hooks/useVentas';
 import { useProductos } from '../hooks/useProductos';
-import { toast } from 'react-toastify'; 
+import { toast } from 'react-toastify';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import { enviarNotificacionStockBajo } from '../Services/emailServices';
 
 // --- HELPERS DE TOASTIFY (Se mantienen igual) ---
@@ -919,31 +921,271 @@ export default function SalesScreen({ user }) {
         setEditingSale(null);
     }, []);
 
-    const executeExportLogic = () => {
+    const executeExportLogic = async () => {
         const dataToExport = filteredData;
-        const headers = "ID Venta,Fecha,Total,Estado,Monto Recibido,Cambio,Productos";
-        const csvContent = [
-            headers,
-            ...dataToExport.map(s => {
-                const productos = s.items?.map(item => `${item.nombre}(${item.cantidad})`).join(';') || '';
-                return `${s.id},${s.date},${s.total.toFixed(2)},${s.status},${(s.montoRecibido || 0).toFixed(2)},${(s.cambio || 0).toFixed(2)},"${productos}"`;
-            })
-        ].join("\n");
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        if (link.download !== undefined) {
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", "reporte_ventas.csv");
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            showExportToast(); 
-        } else {
-            showErrorToast("Error del navegador: No se pudo iniciar la descarga.");
+        // Agregados para hoja Resumen
+        const totalVentas = dataToExport.length;
+        const suma = (sel) => dataToExport.reduce((acc, v) => acc + (Number(sel(v)) || 0), 0);
+        const totalImporte = suma(v => v.total);
+        const totalRecibido = suma(v => v.montoRecibido);
+        const totalCambio = suma(v => v.cambio);
+        const ticketPromedio = totalVentas > 0 ? totalImporte / totalVentas : 0;
+
+        // Agregado por estado
+        const porEstado = {};
+        for (const v of dataToExport) {
+            const st = v.status || 'Desconocido';
+            if (!porEstado[st]) porEstado[st] = { ventas: 0, total: 0 };
+            porEstado[st].ventas += 1;
+            porEstado[st].total += Number(v.total || 0);
         }
+
+        // Top productos (cantidad e importe)
+        const productosAgg = new Map(); // key: nombre, val: {cantidad, importe}
+        for (const v of dataToExport) {
+            for (const it of (v.items || [])) {
+                const key = it.nombre || it.productoId || 'Producto';
+                const prev = productosAgg.get(key) || { cantidad: 0, importe: 0 };
+                productosAgg.set(key, {
+                    cantidad: prev.cantidad + (Number(it.cantidad) || 0),
+                    importe: prev.importe + (Number(it.subtotal) || 0)
+                });
+            }
+        }
+        const topProductos = Array.from(productosAgg.entries())
+            .map(([nombre, v]) => ({ nombre, ...v }))
+            .sort((a, b) => b.importe - a.importe)
+            .slice(0, 10);
+
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'GestorPlantaAgua';
+        workbook.created = new Date();
+
+        const sheet = workbook.addWorksheet('Ventas', { views: [{ state: 'frozen', xSplit: 0, ySplit: 2 }] });
+
+        // Intentar cargar logo desde src/img primero y luego desde public (PNG/JPG)
+        let imageId = null;
+        try {
+            // 1) Intento por import dinámico desde src/img
+            const srcCandidates = ['../img/mana.jpeg', '../img/mana.jpg', '../img/mana.png'];
+            let loaded = false;
+            for (const rel of srcCandidates) {
+                try {
+                    const mod = await import(/* @vite-ignore */ rel);
+                    const url = (mod && mod.default) ? mod.default : mod;
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        const blob = await res.blob();
+                        const arrayBuffer = await blob.arrayBuffer();
+                        const mime = blob.type || '';
+                        const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
+                        if (ext) {
+                            imageId = workbook.addImage({ buffer: new Uint8Array(arrayBuffer), extension: ext });
+                            loaded = true;
+                            break;
+                        }
+                    }
+                } catch (e) { /* sigue probando */ }
+            }
+
+            // 2) Si no se pudo, buscar en rutas de public comunes
+            if (!loaded) {
+                const logoPaths = ['/mana.jpeg', '/assets/mana.jpeg', '/logo.png', '/assets/logo.png', '/logo.jpg', '/assets/logo.jpg'];
+                for (const p of logoPaths) {
+                    try {
+                        const res = await fetch(p);
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            const arrayBuffer = await blob.arrayBuffer();
+                            // Determinar extensión por tipo MIME
+                            const mime = blob.type || '';
+                            const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
+                            if (ext) {
+                                imageId = workbook.addImage({ buffer: new Uint8Array(arrayBuffer), extension: ext });
+                            }
+                            break;
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+            }
+            for (const p of logoPaths) {
+                try {
+                    const res = await fetch(p);
+                    if (res.ok) {
+                        const blob = await res.blob();
+                        const arrayBuffer = await blob.arrayBuffer();
+                        // Determinar extensión por tipo MIME
+                        const mime = blob.type || '';
+                        const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
+                        if (ext) {
+                            imageId = workbook.addImage({ buffer: new Uint8Array(arrayBuffer), extension: ext });
+                        }
+                        break;
+                    }
+                } catch (e) { /* ignore */ }
+            }
+        } catch (e) {
+            console.warn('No se pudo cargar logo para export:', e.message || e);
+        }
+
+        // Título fusionado
+        sheet.mergeCells('A1:G1');
+        const titleCell = sheet.getCell('A1');
+        titleCell.value = 'Reporte de Ventas - Planta de Agua';
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
+        sheet.getRow(1).height = 26;
+
+        // Insert image if found (top-left)
+        if (imageId) {
+            sheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 120, height: 40 } });
+        }
+
+        // Header
+        const header = ['ID Venta','Fecha','Total','Estado','Monto Recibido','Cambio','Productos'];
+        sheet.addRow([]); // fila 2 vacía ya que A1 es título, header será row 3
+        const headerRow = sheet.addRow(header);
+        headerRow.eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B63A9' } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            cell.border = {
+                top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
+            };
+        });
+
+        // Datos + formato condicional básico por total y color por estado en columna Estado
+        const dataStartRow = sheet.rowCount + 1; // debería ser 4
+        for (const s of dataToExport) {
+            const fecha = new Date(s.date);
+            const fechaExcel = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()}`;
+            const productos = (s.items||[]).map(i => `${i.nombre} (${i.cantidad})`).join(', ');
+            const row = sheet.addRow([
+                s.id,
+                fechaExcel,
+                Number((s.total||0).toFixed(2)),
+                s.status,
+                Number((s.montoRecibido||0).toFixed(2)),
+                Number((s.cambio||0).toFixed(2)),
+                productos
+            ]);
+
+            // Formato numérico en celdas
+            row.getCell(3).numFmt = '0.00';
+            row.getCell(5).numFmt = '0.00';
+            row.getCell(6).numFmt = '0.00';
+
+            // Borde en fila
+            row.eachCell({ includeEmpty: true }, (cell) => {
+                cell.border = {
+                    top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
+                };
+            });
+
+            // Resaltar según total (ejemplo): <50 rojo, >200 verde
+            const totalVal = Number(s.total || 0);
+            if (totalVal < 50) {
+                row.eachCell((cell, colNumber) => { if (colNumber <= 6) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E1' } }; });
+            } else if (totalVal > 200) {
+                row.eachCell((cell, colNumber) => { if (colNumber <= 6) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6FFEA' } }; });
+            }
+
+            // Color por estado SOLO en la celda de estado (col 4) para no interferir con lo anterior
+            const estadoCell = row.getCell(4);
+            const estado = (s.status || '').toLowerCase();
+            if (estado.includes('cancel')) {
+                estadoCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE5E7EB'} }; // gris claro
+            } else if (estado.includes('pend')) {
+                estadoCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFFEF9C3'} }; // amarillo claro
+            } else if (estado.includes('pag')) {
+                estadoCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE6FFEA'} }; // verde claro
+            }
+        }
+
+        // Ajustar anchos
+        const colWidths = [18, 14, 12, 12, 14, 10, 50];
+        colWidths.forEach((w, i) => { sheet.getColumn(i+1).width = w; });
+
+        // Autofilter para solo las filas de datos (A3:G{dataEndRow})
+        const dataEndRow = sheet.rowCount;
+        sheet.autoFilter = { from: 'A3', to: `G${dataEndRow}` };
+
+        // Fila de totales al final (no incluida en autofiltro)
+        const totalsRow = sheet.addRow(['', 'Totales', { formula: `SUM(C${dataStartRow}:C${dataEndRow})` }, '', { formula: `SUM(E${dataStartRow}:E${dataEndRow})` }, { formula: `SUM(F${dataStartRow}:F${dataEndRow})` }, '' ]);
+        totalsRow.eachCell((cell) => {
+            cell.font = { bold: true };
+            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+        });
+        totalsRow.getCell(3).numFmt = '0.00';
+        totalsRow.getCell(5).numFmt = '0.00';
+        totalsRow.getCell(6).numFmt = '0.00';
+
+        // =========================
+        // Hoja Resumen
+        // =========================
+        const resumen = workbook.addWorksheet('Resumen');
+        resumen.mergeCells('A1:E1');
+        const tCell = resumen.getCell('A1');
+        tCell.value = 'Resumen de Ventas';
+        tCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        tCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+        tCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
+        resumen.getRow(1).height = 24;
+
+        // KPIs
+        const kpiHeader = resumen.addRow(['Métrica', 'Valor']);
+        kpiHeader.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        const kpiRows = [
+            ['Total de ventas', totalVentas],
+            ['Importe total vendido', totalImporte],
+            ['Monto recibido total', totalRecibido],
+            ['Cambio total', totalCambio],
+            ['Ticket promedio', ticketPromedio]
+        ];
+        for (const [m, v] of kpiRows) {
+            const r = resumen.addRow([m, v]);
+            r.getCell(2).numFmt = '0.00';
+            r.eachCell(c => { c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        }
+        resumen.getColumn(1).width = 28;
+        resumen.getColumn(2).width = 18;
+
+        resumen.addRow([]);
+
+        // Por estado
+        const estadoHeader = resumen.addRow(['Estado', 'Ventas', 'Importe total']);
+        estadoHeader.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        for (const [estado, info] of Object.entries(porEstado)) {
+            const r = resumen.addRow([estado, info.ventas, info.total]);
+            r.getCell(3).numFmt = '0.00';
+            r.eachCell(c => { c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        }
+        resumen.getColumn(1).width = Math.max(28, ...Object.keys(porEstado).map(s => s.length + 4));
+        resumen.getColumn(2).width = 12;
+        resumen.getColumn(3).width = 18;
+
+        resumen.addRow([]);
+
+        // Top productos
+        const topHeader = resumen.addRow(['Producto', 'Cantidad', 'Importe']);
+        topHeader.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        for (const p of topProductos) {
+            const r = resumen.addRow([p.nombre, p.cantidad, p.importe]);
+            r.getCell(2).numFmt = '0';
+            r.getCell(3).numFmt = '0.00';
+            r.eachCell(c => { c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        }
+        resumen.getColumn(1).width = Math.max(30, ...topProductos.map(p => (p.nombre || '').length + 4));
+        resumen.getColumn(2).width = 12;
+        resumen.getColumn(3).width = 18;
+
+        // Generar archivo y descargar
+    const buf = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buf], { type: 'application/octet-stream' }), `ventas_${Date.now()}.xlsx`);
+        showExportToast();
     };
 
     const handleExportData = () => {
