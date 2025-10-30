@@ -7,6 +7,9 @@ import { useProductos } from '../hooks/useProductos';
 import { toast } from 'react-toastify';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import manaImg from '../img/mana.jpeg';
+import manantialImg from '../img/manantial.png';
+import manImg from '../img/man.png';
 import { enviarNotificacionStockBajo } from '../Services/emailServices';
 
 // --- HELPERS DE TOASTIFY (Se mantienen igual) ---
@@ -964,66 +967,28 @@ export default function SalesScreen({ user }) {
 
         const sheet = workbook.addWorksheet('Ventas', { views: [{ state: 'frozen', xSplit: 0, ySplit: 2 }] });
 
-        // Intentar cargar logo desde src/img primero y luego desde public (PNG/JPG)
-        let imageId = null;
+        // Intentar cargar logo (import estático desde src/img) y convertir a base64 para ExcelJS en navegador
+        let imageBase64 = null;
+        let imageExt = null;
         try {
-            // 1) Intento por import dinámico desde src/img
-            const srcCandidates = ['../img/mana.jpeg', '../img/mana.jpg', '../img/mana.png'];
-            let loaded = false;
-            for (const rel of srcCandidates) {
-                try {
-                    const mod = await import(/* @vite-ignore */ rel);
-                    const url = (mod && mod.default) ? mod.default : mod;
-                    const res = await fetch(url);
-                    if (res.ok) {
-                        const blob = await res.blob();
-                        const arrayBuffer = await blob.arrayBuffer();
-                        const mime = blob.type || '';
-                        const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
-                        if (ext) {
-                            imageId = workbook.addImage({ buffer: new Uint8Array(arrayBuffer), extension: ext });
-                            loaded = true;
-                            break;
-                        }
+            const res = await fetch(manaImg);
+            if (res.ok) {
+                const blob = await res.blob();
+                const mime = blob.type || '';
+                imageExt = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
+                if (imageExt) {
+                    // Leer como data URL y extraer base64
+                    const dataUrl = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                    if (typeof dataUrl === 'string') {
+                        const parts = dataUrl.split(',');
+                        imageBase64 = parts.length > 1 ? parts[1] : parts[0];
                     }
-                } catch (e) { /* sigue probando */ }
-            }
-
-            // 2) Si no se pudo, buscar en rutas de public comunes
-            if (!loaded) {
-                const logoPaths = ['/mana.jpeg', '/assets/mana.jpeg', '/logo.png', '/assets/logo.png', '/logo.jpg', '/assets/logo.jpg'];
-                for (const p of logoPaths) {
-                    try {
-                        const res = await fetch(p);
-                        if (res.ok) {
-                            const blob = await res.blob();
-                            const arrayBuffer = await blob.arrayBuffer();
-                            // Determinar extensión por tipo MIME
-                            const mime = blob.type || '';
-                            const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
-                            if (ext) {
-                                imageId = workbook.addImage({ buffer: new Uint8Array(arrayBuffer), extension: ext });
-                            }
-                            break;
-                        }
-                    } catch (e) { /* ignore */ }
                 }
-            }
-            for (const p of logoPaths) {
-                try {
-                    const res = await fetch(p);
-                    if (res.ok) {
-                        const blob = await res.blob();
-                        const arrayBuffer = await blob.arrayBuffer();
-                        // Determinar extensión por tipo MIME
-                        const mime = blob.type || '';
-                        const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
-                        if (ext) {
-                            imageId = workbook.addImage({ buffer: new Uint8Array(arrayBuffer), extension: ext });
-                        }
-                        break;
-                    }
-                } catch (e) { /* ignore */ }
             }
         } catch (e) {
             console.warn('No se pudo cargar logo para export:', e.message || e);
@@ -1033,15 +998,13 @@ export default function SalesScreen({ user }) {
         sheet.mergeCells('A1:G1');
         const titleCell = sheet.getCell('A1');
         titleCell.value = 'Reporte de Ventas - Planta de Agua';
-        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        titleCell.alignment = { horizontal: 'left', vertical: 'distributed' };
         titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
         titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
-        sheet.getRow(1).height = 26;
+    // Aumentar la altura de la fila del título para alojar el logo sin solapamientos
+    sheet.getRow(1).height = 40;
 
-        // Insert image if found (top-left)
-        if (imageId) {
-            sheet.addImage(imageId, { tl: { col: 0, row: 0 }, ext: { width: 120, height: 40 } });
-        }
+        // Nota: la imagen se añadirá después de crear el header para calcular la columna destino
 
         // Header
         const header = ['ID Venta','Fecha','Total','Estado','Monto Recibido','Cambio','Productos'];
@@ -1055,6 +1018,57 @@ export default function SalesScreen({ user }) {
                 top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
             };
         });
+
+        // Insertar imagen en el header si se cargó correctamente (base64 en navegador)
+        if (!imageBase64) {
+            // intentar con alternativas de la carpeta img
+            try {
+                const tryPaths = [manantialImg, manImg];
+                for (const p of tryPaths) {
+                    try {
+                        const r = await fetch(p);
+                        if (!r.ok) continue;
+                        const b = await r.blob();
+                        const mime = b.type || '';
+                        const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
+                        if (!ext) continue;
+                        const dataUrl = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(b);
+                        });
+                        const parts = (typeof dataUrl === 'string') ? dataUrl.split(',') : [];
+                        if (parts.length > 1) {
+                            imageBase64 = parts[1];
+                            imageExt = ext;
+                            break;
+                        }
+                    } catch (e) { /* sigue intentando */ }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        if (imageBase64 && imageExt) {
+            try {
+                const imageId = workbook.addImage({ base64: imageBase64, extension: imageExt });
+                // Anclar la imagen usando coordenadas de esquina superior izquierda (tl) y
+                // esquina inferior derecha (br) para forzar que el borde derecho quede
+                // exactamente en el límite derecho del área de columnas del header.
+                // header.length es el número de columnas (ej: 7 para A..G)
+                const brCol = header.length; // 1-based boundary (ExcelJS uses 0-based coords for tl/br)
+                // Definimos que la imagen ocupe la última columna completa: desde brCol-1 a brCol
+                const tlCol = Math.max(0, brCol - 1);
+                try {
+                    sheet.addImage(imageId, { tl: { col: tlCol, row: 0.02 }, br: { col: brCol, row: 1.2 } });
+                } catch (e) {
+                    // Fallback: si no funciona la ancla tl/br, usar positioning por ext
+                    sheet.addImage(imageId, { tl: { col: Math.max(0, brCol - 1), row: 0.08 }, ext: { width: 150, height: 48 } });
+                }
+            } catch (e) {
+                console.warn('No se pudo añadir imagen al sheet:', e.message || e);
+            }
+        }
 
         // Datos + formato condicional básico por total y color por estado en columna Estado
         const dataStartRow = sheet.rowCount + 1; // debería ser 4
@@ -1111,6 +1125,33 @@ export default function SalesScreen({ user }) {
         // Autofilter para solo las filas de datos (A3:G{dataEndRow})
         const dataEndRow = sheet.rowCount;
         sheet.autoFilter = { from: 'A3', to: `G${dataEndRow}` };
+
+        // Ajustes para la columna de 'Productos': wrapText y altura dinámica por fila
+        try {
+            const productosColIndex = 7; // columna G (1-based)
+            const productosCol = sheet.getColumn(productosColIndex);
+            // Asegurar que la columna permita wrap
+            productosCol.alignment = { wrapText: true };
+
+            // Estimar caracteres por línea según ancho de columna (aprox)
+            const charsPerLine = Math.max(30, Math.floor((productosCol.width || 50)));
+
+            for (let r = dataStartRow; r <= dataEndRow; r++) {
+                const cell = sheet.getCell(r, productosColIndex);
+                // Forzar wrap en la celda
+                if (!cell.alignment) cell.alignment = {};
+                cell.alignment.wrapText = true;
+
+                const text = String(cell.value || '');
+                // Contar líneas por comas o longitud
+                const approxLines = Math.max(1, Math.ceil(text.length / charsPerLine));
+                // Setear altura de fila (15pt por línea aprox)
+                const newHeight = Math.min(400, approxLines * 15);
+                sheet.getRow(r).height = Math.max(sheet.getRow(r).height || 15, newHeight);
+            }
+        } catch (e) {
+            console.warn('No se pudo ajustar dinamicamente la columna Productos:', e.message || e);
+        }
 
         // Fila de totales al final (no incluida en autofiltro)
         const totalsRow = sheet.addRow(['', 'Totales', { formula: `SUM(C${dataStartRow}:C${dataEndRow})` }, '', { formula: `SUM(E${dataStartRow}:E${dataEndRow})` }, { formula: `SUM(F${dataStartRow}:F${dataEndRow})` }, '' ]);
