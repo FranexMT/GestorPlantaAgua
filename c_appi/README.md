@@ -67,3 +67,21 @@ export default defineConfig([
   },
 ])
 ```
+
+## Exportar reportes a Excel usando una plantilla
+
+La pantalla `SalesScreen` permite exportar el historial y también un archivo Excel basado en una plantilla existente. Para usar una plantilla:
+
+1. Coloca un archivo `report_template.xlsx` en la carpeta `public/` (ruta pública: `/report_template.xlsx`).
+2. Idealmente, la plantilla incluye hojas con estos nombres (pestañas abajo): `Diario`, `Semanal`, `Mensual`, `Anual`.
+  - Si alguna hoja no existe, la app la creará automáticamente al exportar.
+3. La app añadirá filas con estas columnas por cada nivel de agregado:
+  - `Clave` (día p.e. `2025-11-07`, semana ISO p.e. `2025-W45`, mes `2025-11`, año `2025`)
+  - `Ventas`, `Importe Total`, `Monto Recibido`, `Cambio Total`, `Ticket Promedio`, `Unidades Totales`
+4. En la UI aparecerán dos botones (sólo para administradores):
+  - "Exportar Básico": genera un Excel desde cero (sin plantilla) con hoja de ventas y resumen.
+  - "Exportar Plantilla": carga `/report_template.xlsx` y escribe los agregados en las hojas `Diario`, `Semanal`, `Mensual`, `Anual`.
+
+Notas:
+- Puedes diseñar la plantilla con tu formato, logotipos, encabezados o fórmulas. La app sólo inserta/añade filas de datos.
+- Si necesitas otro nombre de archivo, cambia la ruta en `SalesScreen.jsx` (función `executeTemplateExport`).

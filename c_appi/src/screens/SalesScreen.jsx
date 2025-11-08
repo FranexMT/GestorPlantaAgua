@@ -967,11 +967,11 @@ export default function SalesScreen({ user }) {
 
         const sheet = workbook.addWorksheet('Ventas', { views: [{ state: 'frozen', xSplit: 0, ySplit: 2 }] });
 
-        // Intentar cargar logo (import estático desde src/img) y convertir a base64 para ExcelJS en navegador
+        // Intentar cargar logo de Manantial y convertir a base64 para ExcelJS en navegador
         let imageBase64 = null;
         let imageExt = null;
         try {
-            const res = await fetch(manaImg);
+            const res = await fetch(manantialImg);
             if (res.ok) {
                 const blob = await res.blob();
                 const mime = blob.type || '';
@@ -994,15 +994,15 @@ export default function SalesScreen({ user }) {
             console.warn('No se pudo cargar logo para export:', e.message || e);
         }
 
-        // Título fusionado
+        // Zona de imagen (fila 1) y título (fila 2), header en fila 3
         sheet.mergeCells('A1:G1');
-        const titleCell = sheet.getCell('A1');
+        sheet.getRow(1).height = 60; // espacio para el logo
+        sheet.mergeCells('A2:G2');
+        const titleCell = sheet.getCell('A2');
         titleCell.value = 'Reporte de Ventas - Planta de Agua';
-        titleCell.alignment = { horizontal: 'left', vertical: 'distributed' };
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
         titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
         titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
-    // Aumentar la altura de la fila del título para alojar el logo sin solapamientos
-    sheet.getRow(1).height = 40;
 
         // Nota: la imagen se añadirá después de crear el header para calcular la columna destino
 
@@ -1019,11 +1019,11 @@ export default function SalesScreen({ user }) {
             };
         });
 
-        // Insertar imagen en el header si se cargó correctamente (base64 en navegador)
+        // Insertar imagen centrada sobre el header si se cargó correctamente (base64 en navegador)
         if (!imageBase64) {
             // intentar con alternativas de la carpeta img
             try {
-                const tryPaths = [manantialImg, manImg];
+                const tryPaths = [manaImg, manImg];
                 for (const p of tryPaths) {
                     try {
                         const r = await fetch(p);
@@ -1052,26 +1052,19 @@ export default function SalesScreen({ user }) {
         if (imageBase64 && imageExt) {
             try {
                 const imageId = workbook.addImage({ base64: imageBase64, extension: imageExt });
-                // Anclar la imagen usando coordenadas de esquina superior izquierda (tl) y
-                // esquina inferior derecha (br) para forzar que el borde derecho quede
-                // exactamente en el límite derecho del área de columnas del header.
-                // header.length es el número de columnas (ej: 7 para A..G)
-                const brCol = header.length; // 1-based boundary (ExcelJS uses 0-based coords for tl/br)
-                // Definimos que la imagen ocupe la última columna completa: desde brCol-1 a brCol
-                const tlCol = Math.max(0, brCol - 1);
-                try {
-                    sheet.addImage(imageId, { tl: { col: tlCol, row: 0.02 }, br: { col: brCol, row: 1.2 } });
-                } catch (e) {
-                    // Fallback: si no funciona la ancla tl/br, usar positioning por ext
-                    sheet.addImage(imageId, { tl: { col: Math.max(0, brCol - 1), row: 0.08 }, ext: { width: 150, height: 48 } });
-                }
+                const totalCols = header.length; // 7
+                const span = 3; // cuántas columnas ocupará la imagen aprox
+                const startCol = Math.max(0, Math.floor((totalCols - span) / 2));
+                const endCol = startCol + span;
+                // Fila 1 (0-based: 0..1)
+                sheet.addImage(imageId, { tl: { col: startCol, row: 0.0 }, br: { col: endCol, row: 1.0 } });
             } catch (e) {
                 console.warn('No se pudo añadir imagen al sheet:', e.message || e);
             }
         }
 
         // Datos + formato condicional básico por total y color por estado en columna Estado
-        const dataStartRow = sheet.rowCount + 1; // debería ser 4
+    const dataStartRow = sheet.rowCount + 1; // debería ser 4
         for (const s of dataToExport) {
             const fecha = new Date(s.date);
             const fechaExcel = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()}`;
@@ -1224,8 +1217,204 @@ export default function SalesScreen({ user }) {
         resumen.getColumn(3).width = 18;
 
         // Generar archivo y descargar
-    const buf = await workbook.xlsx.writeBuffer();
+        const buf = await workbook.xlsx.writeBuffer();
         saveAs(new Blob([buf], { type: 'application/octet-stream' }), `ventas_${Date.now()}.xlsx`);
+        showExportToast();
+    };
+
+    // ========================= NUEVO: Exportar usando PLANTILLA =========================
+    // Requiere que coloques un archivo de plantilla en /public/report_template.xlsx
+    // La plantilla debe contener (idealmente) hojas con nombres: "Diario", "Semanal", "Mensual", "Anual".
+    // Si alguna falta, se crea automáticamente. Los datos se anexan debajo de la última fila usada.
+    const executeTemplateExport = async () => {
+        const ventasBase = filteredData;
+        if (!ventasBase || ventasBase.length === 0) {
+            showErrorToast('No hay ventas para exportar con plantilla.');
+            return;
+        }
+
+        // 1. Cargar plantilla
+        const workbook = new ExcelJS.Workbook();
+        let templateLoaded = false;
+        try {
+            const resp = await fetch('/report_template.xlsx'); // ruta en /public
+            if (!resp.ok) throw new Error('No se pudo descargar la plantilla');
+            const ab = await resp.arrayBuffer();
+            await workbook.xlsx.load(ab);
+            templateLoaded = true;
+        } catch (e) {
+            console.warn('Fallo al cargar plantilla, se creará una nueva genérica:', e.message);
+        }
+        if (!templateLoaded) {
+            workbook.created = new Date();
+            workbook.creator = 'GestorPlantaAgua';
+        }
+
+        // 2. Helpers de agrupación y parsing
+        const parseFecha = (raw) => {
+            if (!raw) return null;
+            if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+                const [y,m,d] = raw.split('-').map(Number);
+                return new Date(y, m - 1, d);
+            }
+            const dt = new Date(raw);
+            return isNaN(dt.getTime()) ? null : dt;
+        };
+        const getISOWeek = (date) => {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+            const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+        };
+        const agrupar = (selectorClave) => {
+            const map = new Map();
+            for (const v of ventasBase) {
+                const fecha = parseFecha(v.date);
+                if (!fecha) continue;
+                const clave = selectorClave(fecha, v);
+                const entry = map.get(clave) || { ventas: [], clave };
+                entry.ventas.push(v);
+                map.set(clave, entry);
+            }
+            const filas = [];
+            for (const { clave, ventas } of map.values()) {
+                const totalVentas = ventas.length;
+                const sum = (sel) => ventas.reduce((acc,x)=>acc + (Number(sel(x))||0),0);
+                const importeTotal = sum(x=>x.total);
+                const montoRecibido = sum(x=>x.montoRecibido);
+                const cambioTotal = sum(x=>x.cambio);
+                const ticketPromedio = totalVentas>0 ? importeTotal/totalVentas : 0;
+                const unidadesTotales = ventas.reduce((acc,v)=>acc + (v.items||[]).reduce((a,i)=>a + (Number(i.cantidad)||0),0),0);
+                filas.push({ clave, totalVentas, importeTotal, montoRecibido, cambioTotal, ticketPromedio, unidadesTotales });
+            }
+            filas.sort((a,b)=> a.clave.localeCompare(b.clave));
+            return filas;
+        };
+
+        // 2.1 Métricas para hojas Ventas / Resumen
+        const totalVentas = ventasBase.length;
+        const suma = (sel) => ventasBase.reduce((acc, v) => acc + (Number(sel(v)) || 0), 0);
+        const totalImporte = suma(v => v.total);
+        const totalRecibido = suma(v => v.montoRecibido);
+        const totalCambio = suma(v => v.cambio);
+        const ticketPromedio = totalVentas > 0 ? totalImporte / totalVentas : 0;
+        const porEstado = {};
+        for (const v of ventasBase) {
+            const st = v.status || 'Desconocido';
+            if (!porEstado[st]) porEstado[st] = { ventas: 0, total: 0 };
+            porEstado[st].ventas += 1;
+            porEstado[st].total += Number(v.total || 0);
+        }
+        const productosAgg = new Map();
+        for (const v of ventasBase) {
+            for (const it of (v.items || [])) {
+                const key = it.nombre || it.productoId || 'Producto';
+                const prev = productosAgg.get(key) || { cantidad: 0, importe: 0 };
+                productosAgg.set(key, { cantidad: prev.cantidad + (Number(it.cantidad) || 0), importe: prev.importe + (Number(it.subtotal) || 0) });
+            }
+        }
+        const topProductos = Array.from(productosAgg.entries())
+            .map(([nombre, v]) => ({ nombre, ...v }))
+            .sort((a, b) => b.importe - a.importe)
+            .slice(0, 10);
+
+        // 2.2 Agregados periodos
+        const diario = agrupar((f)=>`${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}-${String(f.getDate()).padStart(2,'0')}`);
+        const semanal = agrupar((f)=>getISOWeek(f));
+        const mensual = agrupar((f)=>`${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}`);
+        const anual = agrupar((f)=>`${f.getFullYear()}`);
+
+        // 3. Utilidades hojas
+        const ensureSheet = (nombre) => workbook.getWorksheet(nombre) || workbook.addWorksheet(nombre);
+        const clearSheet = (sheet) => { try { if (sheet.rowCount > 0) sheet.spliceRows(1, sheet.rowCount); } catch(e){} };
+
+        // 3.1 Hoja Diario (detalle) reemplazando totalmente y añadiendo logo manantial centrado
+        const buildDiarioSheet = async () => {
+            const sheet = ensureSheet('Diario');
+            clearSheet(sheet);
+            // Fila 1: imagen, Fila 2: título, Fila 3: encabezados
+            sheet.mergeCells('A1:G1');
+            sheet.getRow(1).height = 60;
+            sheet.mergeCells('A2:G2');
+            const titleCell = sheet.getCell('A2');
+            titleCell.value = 'Reporte de Ventas - Planta de Agua (Diario)';
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
+            const header = ['ID Venta','Fecha','Total','Estado','Monto Recibido','Cambio','Productos'];
+            const headerRow = sheet.addRow(header);
+            headerRow.eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B63A9' } }; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; });
+            // Logo manantial
+            let imgBase64=null,imgExt=null;
+            try { const res=await fetch(manantialImg); if(res.ok){ const blob=await res.blob(); const mime=blob.type||''; imgExt = mime.includes('png')?'png':(mime.includes('jpeg')||mime.includes('jpg')?'jpeg':null); if(imgExt){ const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(blob);}); if(typeof dataUrl==='string'){ const parts=dataUrl.split(','); imgBase64=parts[1]||parts[0]; } } } } catch(e){}
+            if(imgBase64&&imgExt){ try { const imageId=workbook.addImage({ base64: imgBase64, extension: imgExt }); const totalCols=header.length; const span=3; const startCol=Math.max(0, Math.floor((totalCols-span)/2)); const endCol=startCol+span; sheet.addImage(imageId,{ tl:{col:startCol,row:0.0}, br:{col:endCol,row:1.0} }); } catch(e){} }
+            const dataStartRow = sheet.rowCount + 1; // debería ser 4
+            for (const s of ventasBase) {
+                const fecha = parseFecha(s.date) || new Date(s.date);
+                const fechaExcel = fecha ? `${String(fecha.getDate()).padStart(2,'0')}/${String(fecha.getMonth()+1).padStart(2,'0')}/${fecha.getFullYear()}` : String(s.date);
+                const productosTxt = (s.items||[]).map(i => `${i.nombre} (${i.cantidad})`).join(', ');
+                const row = sheet.addRow([ s.id, fechaExcel, Number((s.total||0).toFixed(2)), s.status, Number((s.montoRecibido||0).toFixed(2)), Number((s.cambio||0).toFixed(2)), productosTxt ]);
+                row.getCell(3).numFmt='0.00'; row.getCell(5).numFmt='0.00'; row.getCell(6).numFmt='0.00';
+                row.eachCell({includeEmpty:true},cell=>{cell.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };});
+                const totalVal=Number(s.total||0); if(totalVal<50){ row.eachCell((cell,c)=>{ if(c<=6) cell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFFFE4E1'} }; }); } else if(totalVal>200){ row.eachCell((cell,c)=>{ if(c<=6) cell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFE6FFEA'} }; }); }
+                const estadoCell=row.getCell(4); const estado=(s.status||'').toLowerCase(); if(estado.includes('cancel')) estadoCell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFE5E7EB'} }; else if(estado.includes('pend')) estadoCell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFFEF9C3'} }; else if(estado.includes('pag')) estadoCell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFE6FFEA'} };
+            }
+            [18,14,12,12,14,10,50].forEach((w,i)=>{ sheet.getColumn(i+1).width=w; });
+            const dataEndRow = sheet.rowCount; sheet.autoFilter={ from:'A3', to:`G${dataEndRow}` };
+            try { const idx=7; const col=sheet.getColumn(idx); col.alignment={ wrapText:true }; const charsPerLine=Math.max(30,Math.floor((col.width||50))); for(let r=dataStartRow;r<=dataEndRow;r++){ const cell=sheet.getCell(r,idx); if(!cell.alignment) cell.alignment={}; cell.alignment.wrapText=true; const text=String(cell.value||''); const approx=Math.max(1,Math.ceil(text.length/charsPerLine)); const h=Math.min(400, approx*15); sheet.getRow(r).height=Math.max(sheet.getRow(r).height||15,h); } } catch(e){}
+            const totalsRow=sheet.addRow(['','Totales',{formula:`SUM(C${dataStartRow}:C${dataEndRow})`},'',{formula:`SUM(E${dataStartRow}:E${dataEndRow})`},{formula:`SUM(F${dataStartRow}:F${dataEndRow})`},'' ]);
+            totalsRow.eachCell(cell=>{ cell.font={ bold:true }; cell.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; cell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFF3F4F6'} }; }); totalsRow.getCell(3).numFmt='0.00'; totalsRow.getCell(5).numFmt='0.00'; totalsRow.getCell(6).numFmt='0.00';
+        };
+
+        // 3.2 Hoja Resumen
+        const buildResumenSheet = () => {
+            const resumen = ensureSheet('Resumen');
+            clearSheet(resumen);
+            resumen.mergeCells('A1:E1');
+            const tCell = resumen.getCell('A1');
+            tCell.value = 'Resumen de Ventas';
+            tCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            tCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+            tCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
+            resumen.getRow(1).height = 24;
+            const kpiHeader = resumen.addRow(['Métrica', 'Valor']);
+            kpiHeader.eachCell(c=>{ c.font={ bold:true, color:{argb:'FFFFFFFF'} }; c.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+            [[ 'Total de ventas', totalVentas ], [ 'Importe total vendido', totalImporte ], [ 'Monto recibido total', totalRecibido ], [ 'Cambio total', totalCambio ], [ 'Ticket promedio', ticketPromedio ]].forEach(([m,v])=>{ const r=resumen.addRow([m,v]); r.getCell(2).numFmt='0.00'; r.eachCell(c=>{ c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; }); });
+            resumen.getColumn(1).width=28; resumen.getColumn(2).width=18; resumen.addRow([]);
+            const estadoHeader = resumen.addRow(['Estado','Ventas','Importe total']); estadoHeader.eachCell(c=>{ c.font={ bold:true, color:{argb:'FFFFFFFF'} }; c.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+            for(const [estado,info] of Object.entries(porEstado)){ const r=resumen.addRow([estado, info.ventas, info.total]); r.getCell(3).numFmt='0.00'; r.eachCell(c=>{ c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; }); }
+            resumen.getColumn(1).width=Math.max(28, ...Object.keys(porEstado).map(s=>s.length+4)); resumen.getColumn(2).width=12; resumen.getColumn(3).width=18; resumen.addRow([]);
+            const topHeader = resumen.addRow(['Producto','Cantidad','Importe']); topHeader.eachCell(c=>{ c.font={ bold:true, color:{argb:'FFFFFFFF'} }; c.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+            for(const p of topProductos){ const r=resumen.addRow([p.nombre, p.cantidad, p.importe]); r.getCell(2).numFmt='0'; r.getCell(3).numFmt='0.00'; r.eachCell(c=>{ c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; }); }
+            resumen.getColumn(1).width=Math.max(30, ...topProductos.map(p=>(p.nombre||'').length+4)); resumen.getColumn(2).width=12; resumen.getColumn(3).width=18;
+        };
+
+        // 3.3 Tabla genérica para hojas agregadas
+        const writeTabla = (sheet, titulo, data, startRow=3) => {
+            if (sheet.rowCount === 0) { sheet.getCell('A1').value=titulo; sheet.getCell('A1').font={ bold:true, size:16 }; }
+            // Borrar filas desde startRow si ya existe encabezado (reemplazar datos viejos)
+            // Buscar encabezado existente
+            let headerRowIndex = null; for(let r=1;r<=sheet.rowCount;r++){ const c1=sheet.getCell(r,1).value; if(c1 && String(c1).toLowerCase().includes('clave')){ headerRowIndex=r; break; } }
+            if(!headerRowIndex){ headerRowIndex=startRow; sheet.getRow(headerRowIndex).values=['Clave','Ventas','Importe Total','Monto Recibido','Cambio Total','Ticket Promedio','Unidades Totales']; sheet.getRow(headerRowIndex).eachCell(c=>{ c.font={ bold:true, color:{argb:'FFFFFFFF'} }; c.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; c.alignment={ horizontal:'center' }; }); }
+            else { // limpiar datos debajo del encabezado
+                const last = sheet.rowCount; if (last > headerRowIndex) sheet.spliceRows(headerRowIndex+1, last - headerRowIndex);
+            }
+            let insertRow = headerRowIndex + 1;
+            for(const fila of data){ const row = sheet.getRow(insertRow); row.values=[ fila.clave, fila.totalVentas, fila.importeTotal, fila.montoRecibido, fila.cambioTotal, fila.ticketPromedio, fila.unidadesTotales ]; row.getCell(3).numFmt='0.00'; row.getCell(4).numFmt='0.00'; row.getCell(5).numFmt='0.00'; row.getCell(6).numFmt='0.00'; row.eachCell(c=>{ c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; }); insertRow++; }
+            ['Clave','Ventas','Importe Total','Monto Recibido','Cambio Total','Ticket Promedio','Unidades Totales'].forEach((h,i)=>{ const col = sheet.getColumn(i+1); if(!col.width || col.width < h.length+4) col.width=Math.max(h.length+4,14); });
+        };
+
+    await buildDiarioSheet();
+    buildResumenSheet();
+        writeTabla(ensureSheet('Semanal'), 'Reporte Semanal', semanal);
+        writeTabla(ensureSheet('Mensual'), 'Reporte Mensual', mensual);
+        writeTabla(ensureSheet('Anual'), 'Reporte Anual', anual);
+
+        // 4. Guardar
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer], { type: 'application/octet-stream' }), `reporte_plantilla_${Date.now()}.xlsx`);
         showExportToast();
     };
 
@@ -1496,7 +1685,15 @@ export default function SalesScreen({ user }) {
                             className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-blue-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2 flex-1 md:flex-none justify-center"
                         >
                             <Download size={25} />
-                            Exportar Historial
+                            Exportar Básico
+                        </button>
+                        <button 
+                            onClick={executeTemplateExport} 
+                            title="Usar plantilla Excel con secciones Diario/Semanal/Mensual/Anual" 
+                            className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-green-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2 flex-1 md:flex-none justify-center"
+                        >
+                            <Download size={25} />
+                            Exportar Plantilla
                         </button>
                         {/* Botón para Eliminar Todo */}
                         <button 
