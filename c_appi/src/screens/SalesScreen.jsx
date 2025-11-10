@@ -1737,6 +1737,8 @@ export default function SalesScreen({ user }) {
             {/* -------------------------------------------------------- */}
             {/* SECCIÓN 2: HISTORIAL DE VENTAS (A ANCHO COMPLETO) */}
             {/* -------------------------------------------------------- */}
+             {user?.role === 'admin' && (
+                <>
             <h2 className="text-2xl font-bold text-blue-300 mb-3">Historial de Ventas</h2>
             <div className="bg-gray-800/80 rounded-xl shadow-2xl border border-blue-700/30 overflow-x-auto">
                 <table className="w-full text-left text-gray-300">
@@ -1807,6 +1809,8 @@ export default function SalesScreen({ user }) {
                     </tbody>
                 </table>
             </div>
+            </>
+            )}
         </div>
     );
 }
