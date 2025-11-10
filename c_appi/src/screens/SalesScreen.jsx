@@ -1703,6 +1703,13 @@ export default function SalesScreen({ user }) {
                             <Trash2 size={25} />
                             Eliminar Todo
                         </button>
+                        <button 
+                            onClick={() => window.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1", '_blank', 'noopener,noreferrer')} 
+                            className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-blue-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2 flex-1 md:flex-none justify-center"
+                        >
+                            <Download size={25} />
+                            Historial anual
+                        </button>
                     </div>
                 )}
             </div>
