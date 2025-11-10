@@ -1708,7 +1708,7 @@ export default function SalesScreen({ user }) {
                             className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-blue-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2 flex-1 md:flex-none justify-center"
                         >
                             <Download size={25} />
-                            Historial anual
+                            Historial anual excel
                         </button>
                     </div>
                 )}
