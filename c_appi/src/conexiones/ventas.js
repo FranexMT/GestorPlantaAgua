@@ -8,6 +8,7 @@ import {
   doc,
   serverTimestamp
 } from 'firebase/firestore';
+import { createHistorial } from './historial';
 
 const ventasCollection = collection(db, "ventas");
 
@@ -38,7 +39,20 @@ export const createVenta = async (ventaData) => {
     
     const docRef = await addDoc(ventasCollection, nuevaVenta);
     console.log('Venta creada con ID:', docRef.id);
-    
+    // Intentar crear copia en historial (no bloquear la creación de la venta si falla)
+    try {
+      const historialData = {
+        ...ventaData,
+        ventaId: docRef.id,
+        origen: 'venta'
+      };
+      await createHistorial(historialData);
+      console.log('Copia en historial creada para venta:', docRef.id);
+    } catch (histErr) {
+      console.error('Error al crear copia en historial para venta:', docRef.id, histErr);
+      // No re-lanzamos el error: la venta ya fue creada y no queremos revertirla aquí.
+    }
+
     return {
       id: docRef.id,
       ...ventaData
