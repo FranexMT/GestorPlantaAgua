@@ -141,7 +141,7 @@ function App() {
                   {/* 🧪 BOTÓN DE PRUEBA - Eliminar después de probar */}
                   <button
                     onClick={handleTestNotification}
-                    className="px-3 py-1 bg-green-600 rounded text-white hover:bg-green-700 transition text-xs"
+                    className="hidden px-3 py-1 bg-green-600 rounded text-white hover:bg-green-700 transition text-xs"
                     title="Prueba de notificación de oferta"
                   >
                     🧪 Test Email
