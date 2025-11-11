@@ -9,6 +9,8 @@ import { auth } from './config/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { isAdmin } from './config/roles';
 import { User, UserCog } from "lucide-react"; // 👈 íconos para empleado y admin
+import { initWeeklyOfferNotification } from './Services/scheduler';
+import { enviarNotificacionOferta } from './Services/emailServices';
 
 function App() {
    const [activeScreen, setActiveScreen] = useState('sales'); // 'inventory' o 'sales' (por defecto ventas)
@@ -33,6 +35,24 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // Inicializar scheduler de notificaciones de oferta (miércoles 7:00 AM)
+  useEffect(() => {
+    const cleanup = initWeeklyOfferNotification({
+      hour: 7,        // 🕐 Cambia la hora aquí (0-23)
+      minute: 0,      // 🕐 Cambia los minutos aquí (0-59)
+      second: 0,      // 🕐 Cambia los segundos aquí (0-59)
+      testMode: false, // ⚙️ false = solo miércoles | true = cualquier día (pruebas)
+      templateData: {
+        subject: 'Miércoles de Oferta - Mi Planta',
+        message: '¡Hoy es miércoles! Ven por nuestras ofertas especiales en garrafones, hielo y más.',
+        to_email: 'anuarmartinez0110@gmail.com',
+        from_name: 'Mi Planta - Ofertas',
+        reply_to: 'soporte@miplanta.com'
+      }
+    });
+    return () => cleanup && cleanup();
+  }, []);
+
   // Cerrar sesión
   const handleLogout = async () => {
     try {
@@ -41,6 +61,18 @@ function App() {
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
+  };
+
+  // 🧪 FUNCIÓN DE PRUEBA - Enviar notificación de oferta ahora mismo
+  const handleTestNotification = async () => {
+    console.log('🧪 Enviando notificación de prueba...');
+    await enviarNotificacionOferta({
+      subject: '🧪 PRUEBA MANUAL - Miércoles de Oferta',
+      message: 'Esta es una prueba manual del sistema de notificaciones de oferta.',
+      to_email: 'anuarmartinez0110@gmail.com',
+      from_name: 'Mi Planta - Ofertas',
+      reply_to: 'soporte@miplanta.com'
+    });
   };
 
   if (loading) {
@@ -106,6 +138,15 @@ function App() {
 
                 {/* Usuario e ícono */}
                 <div className="flex items-center space-x-4 ml-6">
+                  {/* 🧪 BOTÓN DE PRUEBA - Eliminar después de probar */}
+                  <button
+                    onClick={handleTestNotification}
+                    className="px-3 py-1 bg-green-600 rounded text-white hover:bg-green-700 transition text-xs"
+                    title="Prueba de notificación de oferta"
+                  >
+                    🧪 Test Email
+                  </button>
+                  
                   <div className="flex items-center gap-2 text-sm text-gray-300">
                     {user.role === 'admin' ? (
                       // Ícono de admin con corbata
