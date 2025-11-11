@@ -10,6 +10,7 @@ import { saveAs } from 'file-saver';
 import manaImg from '../img/mana.jpeg';
 import manantialImg from '../img/manantial.png';
 import manImg from '../img/man.png';
+import { getHistorial } from '../conexiones/historial';
 import { enviarNotificacionStockBajo } from '../Services/emailServices';
 
 // --- HELPERS DE TOASTIFY (Se mantienen igual) ---
@@ -36,7 +37,11 @@ const showErrorToast = (message) => {
         theme: "dark",
     });
 };
-
+// --- helper: generar sello de fecha legible para archivos ---
+const getDateStamp = (d = new Date()) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+};
 
 // --- COMPONENTE DE ESTADO (Se mantiene igual) ---
 const StatusBadge = ({ status }) => {
@@ -545,6 +550,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                                     const p = productosInventario.find(x => x.id === fid); 
                                     if (!p || (parseInt(p.stock) || 0) <= 0) return null; 
                                     return (
+                                        // <button key={fid} type="button" onClick={() => handleProductButtonClick(p)} className="flex-shrink-0 px-2 py-0.5 bg-yellow-500 text-black rounded-lg font-semibold text-xs">
                                         <button key={fid} type="button" onClick={() => handleProductButtonClick(p)} className="flex-shrink-0 px-2 py-0.5 bg-yellow-500 text-black rounded-lg font-semibold text-xs">
                                             {p.nombre}
                                         </button>
@@ -562,10 +568,12 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                                         <p className="text-[10px] opacity-60">Stock: {producto.stock} · ${parseFloat(producto.precio).toFixed(2)}</p>
                                     </div>
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                        <button onClick={() => toggleFavorito(producto.id)} title="Favorito" className={`p-1 rounded-full shadow-lg ${favoritos.includes(producto.id) ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-white'}`}>
+                                        {/* <button onClick={() => toggleFavorito(producto.id)} title="Favorito" className={`p-1 rounded-full shadow-lg ${favoritos.includes(producto.id) ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-white'}`}> */}
+                                        <button type="button" onClick={() => toggleFavorito(producto.id)} title="Favorito" className={`p-1 rounded-full shadow-lg ${favoritos.includes(producto.id) ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-white'}`}>
                                             <Star size={12} />
                                         </button>
-                                        <button onClick={() => handleProductButtonClick(producto)} className="px-2 py-0.5 bg-blue-600 rounded text-white font-semibold text-xs">Añadir</button>
+                                        {/* <button onClick={() => handleProductButtonClick(producto)} className="px-2 py-0.5 bg-blue-600 rounded text-white font-semibold text-xs">Añadir</button> */}
+                                        <button type="button" onClick={() => handleProductButtonClick(producto)} className="px-2 py-0.5 bg-blue-600 rounded text-white font-semibold text-xs">Añadir</button>
                                     </div>
                                 </div>
                             ))}
@@ -927,7 +935,7 @@ export default function SalesScreen({ user }) {
     const executeExportLogic = async () => {
         const dataToExport = filteredData;
 
-        // Agregados para hoja Resumen
+        // Agregados para hoja Resumen (se mantienen igual para reutilizar la lógica)
         const totalVentas = dataToExport.length;
         const suma = (sel) => dataToExport.reduce((acc, v) => acc + (Number(sel(v)) || 0), 0);
         const totalImporte = suma(v => v.total);
@@ -945,7 +953,7 @@ export default function SalesScreen({ user }) {
         }
 
         // Top productos (cantidad e importe)
-        const productosAgg = new Map(); // key: nombre, val: {cantidad, importe}
+        const productosAgg = new Map();
         for (const v of dataToExport) {
             for (const it of (v.items || [])) {
                 const key = it.nombre || it.productoId || 'Producto';
@@ -965,9 +973,9 @@ export default function SalesScreen({ user }) {
         workbook.creator = 'GestorPlantaAgua';
         workbook.created = new Date();
 
-        const sheet = workbook.addWorksheet('Ventas', { views: [{ state: 'frozen', xSplit: 0, ySplit: 2 }] });
+        // ========================= HOJA 1: VENTAS DETALLADAS =========================
+        const sheet = workbook.addWorksheet('Ventas Detalle', { views: [{ state: 'frozen', ySplit: 2 }] });
 
-        // Intentar cargar logo de Manantial y convertir a base64 para ExcelJS en navegador
         let imageBase64 = null;
         let imageExt = null;
         try {
@@ -977,7 +985,6 @@ export default function SalesScreen({ user }) {
                 const mime = blob.type || '';
                 imageExt = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
                 if (imageExt) {
-                    // Leer como data URL y extraer base64
                     const dataUrl = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
                         reader.onload = () => resolve(reader.result);
@@ -994,77 +1001,48 @@ export default function SalesScreen({ user }) {
             console.warn('No se pudo cargar logo para export:', e.message || e);
         }
 
-        // Zona de imagen (fila 1) y título (fila 2), header en fila 3
+        // Estilo: Fondo oscuro para la hoja
+        sheet.properties.defaultRowHeight = 20;
+        sheet.pageSetup.fitToPage = true;
+        sheet.pageSetup.scale = 80;
+        sheet.views = [{ state: 'frozen', ySplit: 2, showGridLines: false }];
+
+        // Título (Fila 1)
         sheet.mergeCells('A1:G1');
-        sheet.getRow(1).height = 60; // espacio para el logo
-        sheet.mergeCells('A2:G2');
-        const titleCell = sheet.getCell('A2');
-        titleCell.value = 'Reporte de Ventas - Planta de Agua';
-        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
+        sheet.getRow(1).height = 60;
+        const titleCell = sheet.getCell('A1');
+        titleCell.value = 'REPORTE DE VENTAS DETALLADO - PLANTA DE AGUA';
+        titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+        titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+        titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF0F172A'} };
 
-        // Nota: la imagen se añadirá después de crear el header para calcular la columna destino
-
-        // Header
-        const header = ['ID Venta','Fecha','Total','Estado','Monto Recibido','Cambio','Productos'];
-        sheet.addRow([]); // fila 2 vacía ya que A1 es título, header será row 3
-        const headerRow = sheet.addRow(header);
-        headerRow.eachCell((cell) => {
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B63A9' } };
-            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            cell.border = {
-                top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
-            };
-        });
-
-        // Insertar imagen centrada sobre el header si se cargó correctamente (base64 en navegador)
-        if (!imageBase64) {
-            // intentar con alternativas de la carpeta img
-            try {
-                const tryPaths = [manaImg, manImg];
-                for (const p of tryPaths) {
-                    try {
-                        const r = await fetch(p);
-                        if (!r.ok) continue;
-                        const b = await r.blob();
-                        const mime = b.type || '';
-                        const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
-                        if (!ext) continue;
-                        const dataUrl = await new Promise((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onload = () => resolve(reader.result);
-                            reader.onerror = reject;
-                            reader.readAsDataURL(b);
-                        });
-                        const parts = (typeof dataUrl === 'string') ? dataUrl.split(',') : [];
-                        if (parts.length > 1) {
-                            imageBase64 = parts[1];
-                            imageExt = ext;
-                            break;
-                        }
-                    } catch (e) { /* sigue intentando */ }
-                }
-            } catch (e) { /* ignore */ }
-        }
-
+        // Insertar imagen (derecha del título)
         if (imageBase64 && imageExt) {
             try {
                 const imageId = workbook.addImage({ base64: imageBase64, extension: imageExt });
-                const totalCols = header.length; // 7
-                const span = 3; // cuántas columnas ocupará la imagen aprox
-                const startCol = Math.max(0, Math.floor((totalCols - span) / 2));
-                const endCol = startCol + span;
-                // Fila 1 (0-based: 0..1)
-                sheet.addImage(imageId, { tl: { col: startCol, row: 0.0 }, br: { col: endCol, row: 1.0 } });
+                sheet.addImage(imageId, { tl: { col: 5.9, row: 0.05 }, br: { col: 6.8, row: 1.15 } });
             } catch (e) {
                 console.warn('No se pudo añadir imagen al sheet:', e.message || e);
             }
         }
 
-        // Datos + formato condicional básico por total y color por estado en columna Estado
-    const dataStartRow = sheet.rowCount + 1; // debería ser 4
+        // Header (Fila 2)
+        const header = ['ID Venta','Fecha','Total','Estado','Monto Recibido','Cambio','Productos'];
+        const headerRow = sheet.addRow(header);
+        headerRow.eachCell((cell) => {
+            cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            cell.border = {
+                top: {style:'thin', color:{argb:'FF374151'}},
+                left: {style:'thin', color:{argb:'FF374151'}},
+                bottom: {style:'medium', color:{argb:'FF374151'}},
+                right: {style:'thin', color:{argb:'FF374151'}}
+            };
+        });
+
+        // Datos (A partir de Fila 3)
+        const dataStartRow = sheet.rowCount + 1;
         for (const s of dataToExport) {
             const fecha = new Date(s.date);
             const fechaExcel = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()}`;
@@ -1079,99 +1057,95 @@ export default function SalesScreen({ user }) {
                 productos
             ]);
 
-            // Formato numérico en celdas
-            row.getCell(3).numFmt = '0.00';
-            row.getCell(5).numFmt = '0.00';
-            row.getCell(6).numFmt = '0.00';
+            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                const isTotalColumn = colNumber === 3 || colNumber === 5 || colNumber === 6;
+                const isStatusColumn = colNumber === 4;
+                const isProductsColumn = colNumber === 7;
 
-            // Borde en fila
-            row.eachCell({ includeEmpty: true }, (cell) => {
+                cell.font = { color: { argb: colNumber === 3 ? 'FF34D399' : 'FFD1D5DB' } };
+                cell.alignment = { horizontal: isProductsColumn ? 'left' : 'center', vertical: 'top', wrapText: isProductsColumn };
+
+                if (isTotalColumn) cell.numFmt = '$#,##0.00';
+                if (colNumber === 6) cell.font = { color: { argb: (s.cambio || 0) < 0 ? 'FFE57373' : 'FF34D399' } };
+
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: row.number % 2 === 0 ? 'FF111827' : 'FF1F2937' } };
                 cell.border = {
-                    top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'}
+                    top: {style:'thin', color:{argb:'FF374151'}},
+                    left: {style:'thin', color:{argb:'FF374151'}},
+                    bottom: {style:'thin', color:{argb:'FF374151'}},
+                    right: {style:'thin', color:{argb:'FF374151'}}
                 };
+
+                if (isStatusColumn) {
+                    const status = (s.status || '').toLowerCase();
+                    if (status.includes('cancel')) {
+                        cell.fill.fgColor.argb = 'FFDC2626';
+                        cell.font = { color: { argb: 'FFFFFFFF' } };
+                    } else if (status.includes('pend')) {
+                        cell.fill.fgColor.argb = 'FFFACC15';
+                        cell.font = { color: { argb: 'FF000000' } };
+                    } else if (status.includes('pag')) {
+                        cell.fill.fgColor.argb = 'FF10B981';
+                        cell.font = { color: { argb: 'FFFFFFFF' } };
+                    }
+                }
             });
 
-            // Resaltar según total (ejemplo): <50 rojo, >200 verde
-            const totalVal = Number(s.total || 0);
-            if (totalVal < 50) {
-                row.eachCell((cell, colNumber) => { if (colNumber <= 6) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E1' } }; });
-            } else if (totalVal > 200) {
-                row.eachCell((cell, colNumber) => { if (colNumber <= 6) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6FFEA' } }; });
-            }
-
-            // Color por estado SOLO en la celda de estado (col 4) para no interferir con lo anterior
-            const estadoCell = row.getCell(4);
-            const estado = (s.status || '').toLowerCase();
-            if (estado.includes('cancel')) {
-                estadoCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE5E7EB'} }; // gris claro
-            } else if (estado.includes('pend')) {
-                estadoCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFFEF9C3'} }; // amarillo claro
-            } else if (estado.includes('pag')) {
-                estadoCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE6FFEA'} }; // verde claro
-            }
+            const productosColIndex = 7;
+            const text = String(row.getCell(productosColIndex).value || '');
+            const charsPerLine = 40;
+            const approxLines = Math.max(1, Math.ceil(text.length / charsPerLine));
+            row.height = Math.min(400, approxLines * 18);
         }
 
-        // Ajustar anchos
-        const colWidths = [18, 14, 12, 12, 14, 10, 50];
-        colWidths.forEach((w, i) => { sheet.getColumn(i+1).width = w; });
-
-        // Autofilter para solo las filas de datos (A3:G{dataEndRow})
         const dataEndRow = sheet.rowCount;
-        sheet.autoFilter = { from: 'A3', to: `G${dataEndRow}` };
-
-        // Ajustes para la columna de 'Productos': wrapText y altura dinámica por fila
-        try {
-            const productosColIndex = 7; // columna G (1-based)
-            const productosCol = sheet.getColumn(productosColIndex);
-            // Asegurar que la columna permita wrap
-            productosCol.alignment = { wrapText: true };
-
-            // Estimar caracteres por línea según ancho de columna (aprox)
-            const charsPerLine = Math.max(30, Math.floor((productosCol.width || 50)));
-
-            for (let r = dataStartRow; r <= dataEndRow; r++) {
-                const cell = sheet.getCell(r, productosColIndex);
-                // Forzar wrap en la celda
-                if (!cell.alignment) cell.alignment = {};
-                cell.alignment.wrapText = true;
-
-                const text = String(cell.value || '');
-                // Contar líneas por comas o longitud
-                const approxLines = Math.max(1, Math.ceil(text.length / charsPerLine));
-                // Setear altura de fila (15pt por línea aprox)
-                const newHeight = Math.min(400, approxLines * 15);
-                sheet.getRow(r).height = Math.max(sheet.getRow(r).height || 15, newHeight);
-            }
-        } catch (e) {
-            console.warn('No se pudo ajustar dinamicamente la columna Productos:', e.message || e);
-        }
-
-        // Fila de totales al final (no incluida en autofiltro)
-        const totalsRow = sheet.addRow(['', 'Totales', { formula: `SUM(C${dataStartRow}:C${dataEndRow})` }, '', { formula: `SUM(E${dataStartRow}:E${dataEndRow})` }, { formula: `SUM(F${dataStartRow}:F${dataEndRow})` }, '' ]);
+        const totalsRow = sheet.addRow(['', 'TOTALES:', { formula: `SUM(C${dataStartRow}:C${dataEndRow})` }, '', { formula: `SUM(E${dataStartRow}:E${dataEndRow})` }, { formula: `SUM(F${dataStartRow}:F${dataEndRow})` }, '' ]);
         totalsRow.eachCell((cell) => {
-            cell.font = { bold: true };
-            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+            cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+            cell.border = {
+                top: {style:'thick', color:{argb:'FF3B82F6'}},
+                left: {style:'thin', color:{argb:'FF374151'}},
+                bottom: {style:'thin', color:{argb:'FF374151'}},
+                right: {style:'thin', color:{argb:'FF374151'}}
+            };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
         });
-        totalsRow.getCell(3).numFmt = '0.00';
-        totalsRow.getCell(5).numFmt = '0.00';
-        totalsRow.getCell(6).numFmt = '0.00';
+        totalsRow.getCell(3).numFmt = '$#,##0.00';
+        totalsRow.getCell(5).numFmt = '$#,##0.00';
+        totalsRow.getCell(6).numFmt = '$#,##0.00';
+        totalsRow.height = 30;
 
-        // =========================
-        // Hoja Resumen
-        // =========================
-        const resumen = workbook.addWorksheet('Resumen');
-        resumen.mergeCells('A1:E1');
+        const colWidths = [18, 14, 14, 12, 14, 12, 50];
+        colWidths.forEach((w, i) => { sheet.getColumn(i + 1).width = w; });
+        sheet.autoFilter = { from: 'A2', to: `G${dataEndRow}` };
+
+        // ========================= HOJA 2: RESUMEN (BÁSICO) =========================
+        const resumen = workbook.addWorksheet('Resumen Básico');
+        resumen.properties.defaultRowHeight = 20;
+        resumen.views = [{ showGridLines: false }];
+
+        // Título (Fila 1)
+        resumen.mergeCells('A1:C1');
         const tCell = resumen.getCell('A1');
-        tCell.value = 'Resumen de Ventas';
+        tCell.value = 'RESUMEN DE VENTAS GENERAL';
         tCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        tCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-        tCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
-        resumen.getRow(1).height = 24;
+        tCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+        tCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF0F172A'} };
+        resumen.getRow(1).height = 36;
 
-        // KPIs
+        // 1. KPIs
+        resumen.addRow([]);
         const kpiHeader = resumen.addRow(['Métrica', 'Valor']);
-        kpiHeader.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        kpiHeader.eachCell(c => {
+            c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1E40AF'} };
+            c.border = {
+                top:{style:'medium', color:{argb:'FF3B82F6'}},
+                left:{style:'thin', color:{argb:'FF374151'}},
+                bottom:{style:'medium', color:{argb:'FF3B82F6'}},
+                right:{style:'thin', color:{argb:'FF374151'}}
+            };
+        });
         const kpiRows = [
             ['Total de ventas', totalVentas],
             ['Importe total vendido', totalImporte],
@@ -1181,45 +1155,334 @@ export default function SalesScreen({ user }) {
         ];
         for (const [m, v] of kpiRows) {
             const r = resumen.addRow([m, v]);
-            r.getCell(2).numFmt = '0.00';
-            r.eachCell(c => { c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+            r.getCell(1).font = { bold: true, color: { argb: 'FFD1D5DB' } };
+            r.getCell(2).numFmt = '$#,##0.00';
+            r.getCell(2).font = { color: { argb: 'FF34D399' } };
+            r.eachCell(c => {
+                c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: r.number % 2 === 0 ? 'FF111827' : 'FF1F2937' } };
+                c.border = {
+                    top:{style:'thin', color:{argb:'FF374151'}},
+                    left:{style:'thin', color:{argb:'FF374151'}},
+                    bottom:{style:'thin', color:{argb:'FF374151'}},
+                    right:{style:'thin', color:{argb:'FF374151'}}
+                };
+            });
         }
         resumen.getColumn(1).width = 28;
         resumen.getColumn(2).width = 18;
 
+        // 2. Por estado
         resumen.addRow([]);
-
-        // Por estado
         const estadoHeader = resumen.addRow(['Estado', 'Ventas', 'Importe total']);
-        estadoHeader.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        estadoHeader.eachCell(c => {
+            c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1E40AF'} };
+            c.border = {
+                top:{style:'medium', color:{argb:'FF3B82F6'}},
+                left:{style:'thin', color:{argb:'FF374151'}},
+                bottom:{style:'medium', color:{argb:'FF3B82F6'}},
+                right:{style:'thin', color:{argb:'FF374151'}}
+            };
+        });
         for (const [estado, info] of Object.entries(porEstado)) {
             const r = resumen.addRow([estado, info.ventas, info.total]);
-            r.getCell(3).numFmt = '0.00';
-            r.eachCell(c => { c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+            r.getCell(1).font = { bold: true, color: { argb: 'FFD1D5DB' } };
+            r.getCell(3).numFmt = '$#,##0.00';
+            r.getCell(3).font = { color: { argb: 'FF34D399' } };
+            r.eachCell(c => {
+                c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: r.number % 2 === 0 ? 'FF111827' : 'FF1F2937' } };
+                c.border = {
+                    top:{style:'thin', color:{argb:'FF374151'}},
+                    left:{style:'thin', color:{argb:'FF374151'}},
+                    bottom:{style:'thin', color:{argb:'FF374151'}},
+                    right:{style:'thin', color:{argb:'FF374151'}}
+                };
+            });
         }
-        resumen.getColumn(1).width = Math.max(28, ...Object.keys(porEstado).map(s => s.length + 4));
-        resumen.getColumn(2).width = 12;
         resumen.getColumn(3).width = 18;
 
+        // 3. Top productos
         resumen.addRow([]);
-
-        // Top productos
         const topHeader = resumen.addRow(['Producto', 'Cantidad', 'Importe']);
-        topHeader.eachCell(c => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+        topHeader.eachCell(c => {
+            c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF1E40AF'} };
+            c.border = {
+                top:{style:'medium', color:{argb:'FF3B82F6'}},
+                left:{style:'thin', color:{argb:'FF374151'}},
+                bottom:{style:'medium', color:{argb:'FF3B82F6'}},
+                right:{style:'thin', color:{argb:'FF374151'}}
+            };
+        });
         for (const p of topProductos) {
             const r = resumen.addRow([p.nombre, p.cantidad, p.importe]);
+            r.getCell(1).font = { bold: true, color: { argb: 'FFD1D5DB' } };
             r.getCell(2).numFmt = '0';
-            r.getCell(3).numFmt = '0.00';
-            r.eachCell(c => { c.border = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
+            r.getCell(3).numFmt = '$#,##0.00';
+            r.getCell(3).font = { color: { argb: 'FF34D399' } };
+            r.eachCell(c => {
+                c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: r.number % 2 === 0 ? 'FF111827' : 'FF1F2937' } };
+                c.border = {
+                    top:{style:'thin', color:{argb:'FF374151'}},
+                    left:{style:'thin', color:{argb:'FF374151'}},
+                    bottom:{style:'thin', color:{argb:'FF374151'}},
+                    right:{style:'thin', color:{argb:'FF374151'}}
+                };
+            });
         }
         resumen.getColumn(1).width = Math.max(30, ...topProductos.map(p => (p.nombre || '').length + 4));
         resumen.getColumn(2).width = 12;
         resumen.getColumn(3).width = 18;
 
-        // Generar archivo y descargar
         const buf = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buf], { type: 'application/octet-stream' }), `ventas_${Date.now()}.xlsx`);
+        const fecha = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        saveAs(new Blob([buf], { type: 'application/octet-stream' }), `Manantial_reporte_basico_${fecha}.xlsx`);
         showExportToast();
+    };
+
+    // --- COMPONENTE PRINCIPAL (SalesScreen - Vista Unificada) ---
+    // Función para obtener la letra de la columna (se mantiene igual)
+    const getColumnLetter = (colNum) => {
+        let letter = '';
+        let col = colNum;
+        while (col > 0) {
+            const remainder = (col - 1) % 26;
+            letter = String.fromCharCode(65 + remainder) + letter;
+            col = Math.floor((col - 1) / 26);
+        }
+        return letter || 'A';
+    };
+
+    const loadLogo = async () => {
+        const imgs = [manImg, manantialImg, manaImg];
+        for (const src of imgs) {
+            try {
+                const response = await fetch(src);
+                if (!response.ok) continue;
+                const blob = await response.blob();
+                const mime = blob.type || '';
+                const ext = mime.includes('png') ? 'png' : (mime.includes('jpeg') || mime.includes('jpg') ? 'jpeg' : null);
+                if (!ext) continue;
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+                if (typeof dataUrl === 'string') {
+                    const parts = dataUrl.split(',');
+                    return { base64: parts[1] || parts[0], ext };
+                }
+            } catch (error) {
+                console.warn('No se pudo cargar el logo:', error);
+            }
+        }
+        return null;
+    };
+
+    // Helper para añadir encabezado (MODIFICADO para incluir workbook)
+    const addHeaderAndLogo = async (sheet, title, headerCols, workbookInstance) => {
+        const effectiveCols = Math.max(headerCols.length || 1, 7);
+        const lastColLetter = getColumnLetter(effectiveCols);
+
+        sheet.properties.defaultRowHeight = 20;
+        sheet.views = [{ state: 'frozen', ySplit: 2, showGridLines: false }];
+
+        sheet.mergeCells(`A1:${lastColLetter}1`);
+        const titleCell = sheet.getCell('A1');
+        titleCell.value = title;
+        titleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+        titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+        sheet.getRow(1).height = 56;
+
+        const logo = await loadLogo();
+        if (logo) {
+            try {
+                const imgId = workbookInstance.addImage({ base64: logo.base64, extension: logo.ext });
+                const brCol = effectiveCols + 0.02;
+                const tlCol = Math.max(0, brCol - 0.85);
+                sheet.addImage(imgId, { tl: { col: tlCol, row: 0.1 }, br: { col: brCol, row: 1.2 } });
+            } catch (error) {
+                console.warn('No se pudo añadir el logo a la hoja:', error);
+            }
+        }
+
+        const headerRow = sheet.addRow(headerCols);
+        for (let i = 1; i <= effectiveCols; i++) {
+            const cell = headerRow.getCell(i);
+            if (i > headerCols.length) cell.value = '';
+            cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FF374151' } },
+                left: { style: 'thin', color: { argb: 'FF374151' } },
+                bottom: { style: 'medium', color: { argb: 'FF374151' } },
+                right: { style: 'thin', color: { argb: 'FF374151' } },
+            };
+        }
+        headerRow.height = 28;
+    };
+
+    const ensureSheet = (nombre, workbookInstance) => workbookInstance.getWorksheet(nombre) || workbookInstance.addWorksheet(nombre);
+    const clearSheet = (sheet) => {
+        try {
+            if (sheet.rowCount > 0) sheet.spliceRows(1, sheet.rowCount);
+        } catch (error) {
+            console.warn('No se pudo limpiar la hoja:', error);
+        }
+    };
+
+    // Nuevo Helper para escribir reportes detallados (Diario, Mensual, Anual)
+    const writeDetailedReport = async (sheet, title, ventasDetalle, workbook) => {
+        clearSheet(sheet);
+        const header = ['ID Venta', 'Fecha', 'Total', 'Estado', 'Monto Recibido', 'Cambio', 'Productos'];
+        await addHeaderAndLogo(sheet, title, header, workbook);
+
+        const dataStartRow = sheet.rowCount + 1;
+        ventasDetalle.forEach((dataRow) => {
+            const [id, fecha, total, estado, monto, cambio, productos] = dataRow;
+            const row = sheet.addRow([id, fecha, total, estado, monto, cambio, productos]);
+
+            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                const isTotalColumn = colNumber === 3 || colNumber === 5 || colNumber === 6;
+                const isStatusColumn = colNumber === 4;
+                const isProductsColumn = colNumber === 7;
+                const baseColor = colNumber === 3 ? 'FF34D399' : 'FFD1D5DB';
+
+                cell.font = { color: { argb: baseColor } };
+                cell.alignment = {
+                    horizontal: isProductsColumn ? 'left' : 'center',
+                    vertical: 'top',
+                    wrapText: isProductsColumn,
+                };
+
+                if (isTotalColumn) cell.numFmt = '$#,##0.00';
+                if (colNumber === 6) {
+                    cell.font = { color: { argb: (cambio || 0) < 0 ? 'FFE57373' : 'FF34D399' } };
+                    cell.numFmt = '$#,##0.00';
+                }
+
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: row.number % 2 === 1 ? 'FF111827' : 'FF1F2937' },
+                };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FF374151' } },
+                    left: { style: 'thin', color: { argb: 'FF374151' } },
+                    bottom: { style: 'thin', color: { argb: 'FF374151' } },
+                    right: { style: 'thin', color: { argb: 'FF374151' } },
+                };
+
+                if (isStatusColumn) {
+                    const status = String(cell.value || '').toLowerCase();
+                    if (status.includes('cancel')) {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+                        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+                    } else if (status.includes('pend')) {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFACC15' } };
+                        cell.font = { color: { argb: 'FF000000' }, bold: true };
+                    } else if (status.includes('pag')) {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+                        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+                    }
+                }
+            });
+
+            const productosCell = row.getCell(7);
+            productosCell.alignment = {
+                ...(productosCell.alignment || {}),
+                horizontal: 'left',
+                vertical: 'top',
+                wrapText: true,
+            };
+            const text = String(productosCell.value || '');
+            const approxLines = Math.max(1, Math.ceil(text.length / 45));
+            row.height = Math.min(approxLines * 18, 160);
+        });
+
+        const dataEndRow = sheet.rowCount;
+        if (dataEndRow >= dataStartRow) {
+            const totalRow = sheet.addRow([
+                '',
+                'TOTALES:',
+                { formula: `SUM(C${dataStartRow}:C${dataEndRow})` },
+                '',
+                { formula: `SUM(E${dataStartRow}:E${dataEndRow})` },
+                { formula: `SUM(F${dataStartRow}:F${dataEndRow})` },
+                '',
+            ]);
+            totalRow.eachCell((cell) => {
+                cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+                cell.border = {
+                    top: { style: 'thick', color: { argb: 'FF3B82F6' } },
+                    left: { style: 'thin', color: { argb: 'FF374151' } },
+                    bottom: { style: 'thin', color: { argb: 'FF374151' } },
+                    right: { style: 'thin', color: { argb: 'FF374151' } },
+                };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
+            });
+            totalRow.getCell(3).numFmt = '$#,##0.00';
+            totalRow.getCell(5).numFmt = '$#,##0.00';
+            totalRow.getCell(6).numFmt = '$#,##0.00';
+            totalRow.height = 30;
+
+            sheet.autoFilter = { from: 'A2', to: `G${dataEndRow}` };
+        }
+
+        const widths = [18, 14, 14, 14, 14, 12, 48];
+        widths.forEach((w, index) => {
+            const column = sheet.getColumn(index + 1);
+            column.width = Math.max(column.width || 0, w);
+        });
+    };
+
+    // Helper para escribir tablas agregadas (Semanal, Productos, Resumen)
+    const writeAggregatedTable = (sheet, header, rows) => {
+        const shouldAddHeader = sheet.rowCount <= 1;
+        if (shouldAddHeader) {
+            const headerRow = sheet.addRow(header);
+            headerRow.eachCell((cell) => {
+                cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FF374151' } },
+                    left: { style: 'thin', color: { argb: 'FF374151' } },
+                    bottom: { style: 'medium', color: { argb: 'FF374151' } },
+                    right: { style: 'thin', color: { argb: 'FF374151' } },
+                };
+            });
+            headerRow.height = 26;
+        }
+
+        rows.forEach((cols, idx) => {
+            const row = sheet.addRow(cols);
+            row.eachCell({ includeEmpty: true }, (cell, colIndex) => {
+                const isMetricColumn = colIndex === 1;
+                cell.alignment = {
+                    horizontal: isMetricColumn ? 'left' : 'center',
+                    vertical: 'middle',
+                    wrapText: true,
+                };
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: idx % 2 === 0 ? 'FF111827' : 'FF1F2937' },
+                };
+                cell.font = {
+                    color: { argb: isMetricColumn ? 'FFE5E7EB' : 'FF34D399' },
+                };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FF374151' } },
+                    left: { style: 'thin', color: { argb: 'FF374151' } },
+                    bottom: { style: 'thin', color: { argb: 'FF374151' } },
+                    right: { style: 'thin', color: { argb: 'FF374151' } },
+                };
+            });
+        });
     };
 
     // ========================= NUEVO: Exportar usando PLANTILLA =========================
@@ -1227,194 +1490,255 @@ export default function SalesScreen({ user }) {
     // La plantilla debe contener (idealmente) hojas con nombres: "Diario", "Semanal", "Mensual", "Anual".
     // Si alguna falta, se crea automáticamente. Los datos se anexan debajo de la última fila usada.
     const executeTemplateExport = async () => {
-        const ventasBase = filteredData;
+        let ventasBase = [];
+        try {
+            ventasBase = await getHistorial();
+        } catch (error) {
+            console.warn('Fallo al obtener historial, usando ventas filtradas:', error);
+            ventasBase = filteredData;
+        }
         if (!ventasBase || ventasBase.length === 0) {
-            showErrorToast('No hay ventas para exportar con plantilla.');
+            showErrorToast('No hay ventas en historial para exportar.');
             return;
         }
 
-        // 1. Cargar plantilla
         const workbook = new ExcelJS.Workbook();
-        let templateLoaded = false;
         try {
-            const resp = await fetch('/report_template.xlsx'); // ruta en /public
-            if (!resp.ok) throw new Error('No se pudo descargar la plantilla');
-            const ab = await resp.arrayBuffer();
-            await workbook.xlsx.load(ab);
-            templateLoaded = true;
-        } catch (e) {
-            console.warn('Fallo al cargar plantilla, se creará una nueva genérica:', e.message);
-        }
-        if (!templateLoaded) {
+            const response = await fetch('/report_template.xlsx');
+            if (!response.ok) throw new Error('No se pudo descargar la plantilla base');
+            const arrayBuffer = await response.arrayBuffer();
+            await workbook.xlsx.load(arrayBuffer);
+        } catch (error) {
+            console.warn('Sin plantilla externa, se genera dinámicamente:', error?.message || error);
             workbook.created = new Date();
             workbook.creator = 'GestorPlantaAgua';
         }
 
-        // 2. Helpers de agrupación y parsing
+        const toNumber = (value) => {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : 0;
+        };
+        const toFixedNumber = (value, decimals = 2) => Number(toNumber(value).toFixed(decimals));
+
         const parseFecha = (raw) => {
             if (!raw) return null;
             if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
-                const [y,m,d] = raw.split('-').map(Number);
+                const [y, m, d] = raw.split('-').map(Number);
                 return new Date(y, m - 1, d);
             }
-            const dt = new Date(raw);
-            return isNaN(dt.getTime()) ? null : dt;
+            const date = new Date(raw);
+            return Number.isNaN(date.getTime()) ? null : date;
+        };
+        const formatFecha = (raw) => {
+            const fecha = parseFecha(raw);
+            if (!fecha) return '';
+            const dd = String(fecha.getDate()).padStart(2, '0');
+            const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+            return `${dd}/${mm}/${fecha.getFullYear()}`;
         };
         const getISOWeek = (date) => {
             const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
             const dayNum = d.getUTCDay() || 7;
             d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-            const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
             const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-            return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+            return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
         };
         const agrupar = (selectorClave) => {
             const map = new Map();
-            for (const v of ventasBase) {
-                const fecha = parseFecha(v.date);
+            for (const venta of ventasBase) {
+                const fecha = parseFecha(venta.date);
                 if (!fecha) continue;
-                const clave = selectorClave(fecha, v);
-                const entry = map.get(clave) || { ventas: [], clave };
-                entry.ventas.push(v);
+                const clave = selectorClave(fecha, venta);
+                const entry = map.get(clave) || { clave, ventas: [] };
+                entry.ventas.push(venta);
                 map.set(clave, entry);
             }
             const filas = [];
             for (const { clave, ventas } of map.values()) {
                 const totalVentas = ventas.length;
-                const sum = (sel) => ventas.reduce((acc,x)=>acc + (Number(sel(x))||0),0);
-                const importeTotal = sum(x=>x.total);
-                const montoRecibido = sum(x=>x.montoRecibido);
-                const cambioTotal = sum(x=>x.cambio);
-                const ticketPromedio = totalVentas>0 ? importeTotal/totalVentas : 0;
-                const unidadesTotales = ventas.reduce((acc,v)=>acc + (v.items||[]).reduce((a,i)=>a + (Number(i.cantidad)||0),0),0);
+                const sum = (selector) => ventas.reduce((acc, item) => acc + toNumber(selector(item)), 0);
+                const importeTotal = sum((item) => item.total);
+                const montoRecibido = sum((item) => item.montoRecibido);
+                const cambioTotal = sum((item) => item.cambio);
+                const ticketPromedio = totalVentas > 0 ? importeTotal / totalVentas : 0;
+                const unidadesTotales = ventas.reduce((acc, venta) => acc + (venta.items || []).reduce((inner, it) => inner + toNumber(it.cantidad), 0), 0);
                 filas.push({ clave, totalVentas, importeTotal, montoRecibido, cambioTotal, ticketPromedio, unidadesTotales });
             }
-            filas.sort((a,b)=> a.clave.localeCompare(b.clave));
-            return filas;
+            return filas.sort((a, b) => a.clave.localeCompare(b.clave));
         };
 
-        // 2.1 Métricas para hojas Ventas / Resumen
+        const ventasOrdenadas = [...ventasBase].sort((a, b) => {
+            const fa = parseFecha(a.date);
+            const fb = parseFecha(b.date);
+            return (fa ? fa.getTime() : 0) - (fb ? fb.getTime() : 0);
+        });
+        const diarioDetalle = [];
+        const mensualDetalle = new Map();
+        const anualDetalle = new Map();
+
+        for (const venta of ventasOrdenadas) {
+            const fecha = parseFecha(venta.date);
+            if (!fecha) continue;
+            const monthKey = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+            const yearKey = `${fecha.getFullYear()}`;
+            const productosTxt = (venta.items || []).map((item) => `${item.nombre} (${item.cantidad})`).join(', ');
+            const rowData = [
+                venta.id,
+                formatFecha(venta.date) || String(venta.date || ''),
+                toFixedNumber(venta.total),
+                venta.status || 'Desconocido',
+                toFixedNumber(venta.montoRecibido),
+                toFixedNumber(venta.cambio),
+                productosTxt,
+            ];
+
+            diarioDetalle.push(rowData);
+            if (!mensualDetalle.has(monthKey)) mensualDetalle.set(monthKey, []);
+            mensualDetalle.get(monthKey).push(rowData);
+            if (!anualDetalle.has(yearKey)) anualDetalle.set(yearKey, []);
+            anualDetalle.get(yearKey).push(rowData);
+        }
+
+        const semanalAgregado = agrupar((fecha) => getISOWeek(fecha));
+        const mensualAgregado = agrupar((fecha) => `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`);
+        const anualAgregado = agrupar((fecha) => `${fecha.getFullYear()}`);
+
         const totalVentas = ventasBase.length;
-        const suma = (sel) => ventasBase.reduce((acc, v) => acc + (Number(sel(v)) || 0), 0);
-        const totalImporte = suma(v => v.total);
-        const totalRecibido = suma(v => v.montoRecibido);
-        const totalCambio = suma(v => v.cambio);
+        const suma = (selector) => ventasBase.reduce((acc, venta) => acc + toNumber(selector(venta)), 0);
+        const totalImporte = suma((venta) => venta.total);
+        const totalRecibido = suma((venta) => venta.montoRecibido);
+        const totalCambio = suma((venta) => venta.cambio);
         const ticketPromedio = totalVentas > 0 ? totalImporte / totalVentas : 0;
-        const porEstado = {};
-        for (const v of ventasBase) {
-            const st = v.status || 'Desconocido';
-            if (!porEstado[st]) porEstado[st] = { ventas: 0, total: 0 };
-            porEstado[st].ventas += 1;
-            porEstado[st].total += Number(v.total || 0);
-        }
+
         const productosAgg = new Map();
-        for (const v of ventasBase) {
-            for (const it of (v.items || [])) {
-                const key = it.nombre || it.productoId || 'Producto';
-                const prev = productosAgg.get(key) || { cantidad: 0, importe: 0 };
-                productosAgg.set(key, { cantidad: prev.cantidad + (Number(it.cantidad) || 0), importe: prev.importe + (Number(it.subtotal) || 0) });
+        for (const venta of ventasBase) {
+            const vistos = new Set();
+            for (const item of venta.items || []) {
+                const key = item.nombre || item.productoId || 'Producto';
+                const cantidad = toNumber(item.cantidad);
+                let importeItem = toNumber(item.subtotal);
+                if (!importeItem) {
+                    const precioReferencia = toNumber(item.precio ?? item.price);
+                    importeItem = precioReferencia * cantidad;
+                }
+                const prev = productosAgg.get(key) || { ventas: 0, cantidad: 0, importe: 0 };
+                if (!vistos.has(key)) {
+                    prev.ventas += 1;
+                    vistos.add(key);
+                }
+                prev.cantidad += cantidad;
+                prev.importe += importeItem;
+                productosAgg.set(key, prev);
             }
         }
-        const topProductos = Array.from(productosAgg.entries())
-            .map(([nombre, v]) => ({ nombre, ...v }))
-            .sort((a, b) => b.importe - a.importe)
-            .slice(0, 10);
+        const productosRows = Array.from(productosAgg.entries())
+            .map(([nombre, info]) => ({
+                nombre,
+                ventas: toFixedNumber(info.ventas, 0),
+                cantidad: toFixedNumber(info.cantidad, 0),
+                importe: toFixedNumber(info.importe),
+            }))
+            .sort((a, b) => b.importe - a.importe);
 
-        // 2.2 Agregados periodos
-        const diario = agrupar((f)=>`${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}-${String(f.getDate()).padStart(2,'0')}`);
-        const semanal = agrupar((f)=>getISOWeek(f));
-        const mensual = agrupar((f)=>`${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,'0')}`);
-        const anual = agrupar((f)=>`${f.getFullYear()}`);
+        const resumenData = [
+            ['Total de ventas', totalVentas],
+            ['Importe total vendido', totalImporte],
+            ['Monto recibido total', totalRecibido],
+            ['Cambio total', totalCambio],
+            ['Ticket promedio', ticketPromedio],
+        ];
 
-        // 3. Utilidades hojas
-        const ensureSheet = (nombre) => workbook.getWorksheet(nombre) || workbook.addWorksheet(nombre);
-        const clearSheet = (sheet) => { try { if (sheet.rowCount > 0) sheet.spliceRows(1, sheet.rowCount); } catch(e){} };
+        const diarioSheet = ensureSheet('Diario', workbook);
+        await writeDetailedReport(diarioSheet, 'Reporte de Ventas Detallado (Diario)', diarioDetalle, workbook);
 
-        // 3.1 Hoja Diario (detalle) reemplazando totalmente y añadiendo logo manantial centrado
-        const buildDiarioSheet = async () => {
-            const sheet = ensureSheet('Diario');
+        for (const [monthKey, rows] of Array.from(mensualDetalle.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+            const sheetName = `Mensual - ${monthKey}`;
+            const sheet = ensureSheet(sheetName, workbook);
+            await writeDetailedReport(sheet, `Reporte de Ventas Detallado del Mes: ${monthKey}`, rows, workbook);
+        }
+
+        for (const [yearKey, rows] of Array.from(anualDetalle.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+            const sheetName = `Anual - ${yearKey}`;
+            const sheet = ensureSheet(sheetName, workbook);
+            await writeDetailedReport(sheet, `Reporte de Ventas Detallado del Año: ${yearKey}`, rows, workbook);
+        }
+
+        const aggregatedHeader = ['Clave', 'Ventas', 'Importe Total', 'Monto Recibido', 'Cambio Total', 'Ticket Promedio', 'Unidades Totales'];
+
+        const buildAggregated = async (sheetName, title, data) => {
+            const sheet = ensureSheet(sheetName, workbook);
             clearSheet(sheet);
-            // Fila 1: imagen, Fila 2: título, Fila 3: encabezados
-            sheet.mergeCells('A1:G1');
-            sheet.getRow(1).height = 60;
-            sheet.mergeCells('A2:G2');
-            const titleCell = sheet.getCell('A2');
-            titleCell.value = 'Reporte de Ventas - Planta de Agua (Diario)';
-            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-            titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-            titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
-            const header = ['ID Venta','Fecha','Total','Estado','Monto Recibido','Cambio','Productos'];
-            const headerRow = sheet.addRow(header);
-            headerRow.eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B63A9' } }; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; });
-            // Logo manantial
-            let imgBase64=null,imgExt=null;
-            try { const res=await fetch(manantialImg); if(res.ok){ const blob=await res.blob(); const mime=blob.type||''; imgExt = mime.includes('png')?'png':(mime.includes('jpeg')||mime.includes('jpg')?'jpeg':null); if(imgExt){ const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(blob);}); if(typeof dataUrl==='string'){ const parts=dataUrl.split(','); imgBase64=parts[1]||parts[0]; } } } } catch(e){}
-            if(imgBase64&&imgExt){ try { const imageId=workbook.addImage({ base64: imgBase64, extension: imgExt }); const totalCols=header.length; const span=3; const startCol=Math.max(0, Math.floor((totalCols-span)/2)); const endCol=startCol+span; sheet.addImage(imageId,{ tl:{col:startCol,row:0.0}, br:{col:endCol,row:1.0} }); } catch(e){} }
-            const dataStartRow = sheet.rowCount + 1; // debería ser 4
-            for (const s of ventasBase) {
-                const fecha = parseFecha(s.date) || new Date(s.date);
-                const fechaExcel = fecha ? `${String(fecha.getDate()).padStart(2,'0')}/${String(fecha.getMonth()+1).padStart(2,'0')}/${fecha.getFullYear()}` : String(s.date);
-                const productosTxt = (s.items||[]).map(i => `${i.nombre} (${i.cantidad})`).join(', ');
-                const row = sheet.addRow([ s.id, fechaExcel, Number((s.total||0).toFixed(2)), s.status, Number((s.montoRecibido||0).toFixed(2)), Number((s.cambio||0).toFixed(2)), productosTxt ]);
-                row.getCell(3).numFmt='0.00'; row.getCell(5).numFmt='0.00'; row.getCell(6).numFmt='0.00';
-                row.eachCell({includeEmpty:true},cell=>{cell.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };});
-                const totalVal=Number(s.total||0); if(totalVal<50){ row.eachCell((cell,c)=>{ if(c<=6) cell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFFFE4E1'} }; }); } else if(totalVal>200){ row.eachCell((cell,c)=>{ if(c<=6) cell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFE6FFEA'} }; }); }
-                const estadoCell=row.getCell(4); const estado=(s.status||'').toLowerCase(); if(estado.includes('cancel')) estadoCell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFE5E7EB'} }; else if(estado.includes('pend')) estadoCell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFFEF9C3'} }; else if(estado.includes('pag')) estadoCell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFE6FFEA'} };
+            await addHeaderAndLogo(sheet, title, aggregatedHeader, workbook);
+            const rows = data.map((fila) => [
+                fila.clave,
+                toFixedNumber(fila.totalVentas, 0),
+                toFixedNumber(fila.importeTotal),
+                toFixedNumber(fila.montoRecibido),
+                toFixedNumber(fila.cambioTotal),
+                toFixedNumber(fila.ticketPromedio),
+                toFixedNumber(fila.unidadesTotales, 0),
+            ]);
+            writeAggregatedTable(sheet, aggregatedHeader, rows);
+            aggregatedHeader.forEach((headerText, index) => {
+                const baseWidth = Math.max(headerText.length + 6, index === 0 ? 18 : 14);
+                const column = sheet.getColumn(index + 1);
+                column.width = Math.max(column.width || 0, baseWidth);
+            });
+            [2, 7].forEach((colIndex) => { sheet.getColumn(colIndex).numFmt = '0'; });
+            [3, 4, 5, 6].forEach((colIndex) => { sheet.getColumn(colIndex).numFmt = '0.00'; });
+            if (sheet.rowCount > 2) {
+                const lastColLetter = getColumnLetter(aggregatedHeader.length);
+                sheet.autoFilter = { from: 'A2', to: `${lastColLetter}${sheet.rowCount}` };
             }
-            [18,14,12,12,14,10,50].forEach((w,i)=>{ sheet.getColumn(i+1).width=w; });
-            const dataEndRow = sheet.rowCount; sheet.autoFilter={ from:'A3', to:`G${dataEndRow}` };
-            try { const idx=7; const col=sheet.getColumn(idx); col.alignment={ wrapText:true }; const charsPerLine=Math.max(30,Math.floor((col.width||50))); for(let r=dataStartRow;r<=dataEndRow;r++){ const cell=sheet.getCell(r,idx); if(!cell.alignment) cell.alignment={}; cell.alignment.wrapText=true; const text=String(cell.value||''); const approx=Math.max(1,Math.ceil(text.length/charsPerLine)); const h=Math.min(400, approx*15); sheet.getRow(r).height=Math.max(sheet.getRow(r).height||15,h); } } catch(e){}
-            const totalsRow=sheet.addRow(['','Totales',{formula:`SUM(C${dataStartRow}:C${dataEndRow})`},'',{formula:`SUM(E${dataStartRow}:E${dataEndRow})`},{formula:`SUM(F${dataStartRow}:F${dataEndRow})`},'' ]);
-            totalsRow.eachCell(cell=>{ cell.font={ bold:true }; cell.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; cell.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FFF3F4F6'} }; }); totalsRow.getCell(3).numFmt='0.00'; totalsRow.getCell(5).numFmt='0.00'; totalsRow.getCell(6).numFmt='0.00';
         };
 
-        // 3.2 Hoja Resumen
-        const buildResumenSheet = () => {
-            const resumen = ensureSheet('Resumen');
-            clearSheet(resumen);
-            resumen.mergeCells('A1:E1');
-            const tCell = resumen.getCell('A1');
-            tCell.value = 'Resumen de Ventas';
-            tCell.alignment = { horizontal: 'center', vertical: 'middle' };
-            tCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-            tCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
-            resumen.getRow(1).height = 24;
-            const kpiHeader = resumen.addRow(['Métrica', 'Valor']);
-            kpiHeader.eachCell(c=>{ c.font={ bold:true, color:{argb:'FFFFFFFF'} }; c.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
-            [[ 'Total de ventas', totalVentas ], [ 'Importe total vendido', totalImporte ], [ 'Monto recibido total', totalRecibido ], [ 'Cambio total', totalCambio ], [ 'Ticket promedio', ticketPromedio ]].forEach(([m,v])=>{ const r=resumen.addRow([m,v]); r.getCell(2).numFmt='0.00'; r.eachCell(c=>{ c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; }); });
-            resumen.getColumn(1).width=28; resumen.getColumn(2).width=18; resumen.addRow([]);
-            const estadoHeader = resumen.addRow(['Estado','Ventas','Importe total']); estadoHeader.eachCell(c=>{ c.font={ bold:true, color:{argb:'FFFFFFFF'} }; c.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
-            for(const [estado,info] of Object.entries(porEstado)){ const r=resumen.addRow([estado, info.ventas, info.total]); r.getCell(3).numFmt='0.00'; r.eachCell(c=>{ c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; }); }
-            resumen.getColumn(1).width=Math.max(28, ...Object.keys(porEstado).map(s=>s.length+4)); resumen.getColumn(2).width=12; resumen.getColumn(3).width=18; resumen.addRow([]);
-            const topHeader = resumen.addRow(['Producto','Cantidad','Importe']); topHeader.eachCell(c=>{ c.font={ bold:true, color:{argb:'FFFFFFFF'} }; c.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; });
-            for(const p of topProductos){ const r=resumen.addRow([p.nombre, p.cantidad, p.importe]); r.getCell(2).numFmt='0'; r.getCell(3).numFmt='0.00'; r.eachCell(c=>{ c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; }); }
-            resumen.getColumn(1).width=Math.max(30, ...topProductos.map(p=>(p.nombre||'').length+4)); resumen.getColumn(2).width=12; resumen.getColumn(3).width=18;
-        };
+        await buildAggregated('Semanal', 'Reporte Semanal (Agregado por Periodo)', semanalAgregado);
+        await buildAggregated('Mensual Agregado', 'Reporte Mensual (Agregado por Periodo)', mensualAgregado);
+        await buildAggregated('Anual Agregado', 'Reporte Anual (Agregado por Periodo)', anualAgregado);
 
-        // 3.3 Tabla genérica para hojas agregadas
-        const writeTabla = (sheet, titulo, data, startRow=3) => {
-            if (sheet.rowCount === 0) { sheet.getCell('A1').value=titulo; sheet.getCell('A1').font={ bold:true, size:16 }; }
-            // Borrar filas desde startRow si ya existe encabezado (reemplazar datos viejos)
-            // Buscar encabezado existente
-            let headerRowIndex = null; for(let r=1;r<=sheet.rowCount;r++){ const c1=sheet.getCell(r,1).value; if(c1 && String(c1).toLowerCase().includes('clave')){ headerRowIndex=r; break; } }
-            if(!headerRowIndex){ headerRowIndex=startRow; sheet.getRow(headerRowIndex).values=['Clave','Ventas','Importe Total','Monto Recibido','Cambio Total','Ticket Promedio','Unidades Totales']; sheet.getRow(headerRowIndex).eachCell(c=>{ c.font={ bold:true, color:{argb:'FFFFFFFF'} }; c.fill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF0B63A9'} }; c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; c.alignment={ horizontal:'center' }; }); }
-            else { // limpiar datos debajo del encabezado
-                const last = sheet.rowCount; if (last > headerRowIndex) sheet.spliceRows(headerRowIndex+1, last - headerRowIndex);
+        const resumenSheet = ensureSheet('Resumen KPIs', workbook);
+        clearSheet(resumenSheet);
+        await addHeaderAndLogo(resumenSheet, 'Resumen de Indicadores Clave', ['Métrica', 'Valor'], workbook);
+        const resumenRows = resumenData.map(([label, value]) => [label, value]);
+        writeAggregatedTable(resumenSheet, ['Métrica', 'Valor'], resumenRows);
+        resumenSheet.getColumn(1).width = 32;
+        resumenSheet.getColumn(2).width = 18;
+        resumenSheet.eachRow((row, rowNumber) => {
+            if (rowNumber <= 2) return;
+            const label = String(row.getCell(1).value || '').toLowerCase();
+            if (label.includes('ventas') && !label.includes('importe')) {
+                row.getCell(2).numFmt = '0';
+            } else {
+                row.getCell(2).numFmt = '$#,##0.00';
             }
-            let insertRow = headerRowIndex + 1;
-            for(const fila of data){ const row = sheet.getRow(insertRow); row.values=[ fila.clave, fila.totalVentas, fila.importeTotal, fila.montoRecibido, fila.cambioTotal, fila.ticketPromedio, fila.unidadesTotales ]; row.getCell(3).numFmt='0.00'; row.getCell(4).numFmt='0.00'; row.getCell(5).numFmt='0.00'; row.getCell(6).numFmt='0.00'; row.eachCell(c=>{ c.border={ top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} }; }); insertRow++; }
-            ['Clave','Ventas','Importe Total','Monto Recibido','Cambio Total','Ticket Promedio','Unidades Totales'].forEach((h,i)=>{ const col = sheet.getColumn(i+1); if(!col.width || col.width < h.length+4) col.width=Math.max(h.length+4,14); });
-        };
+            row.getCell(1).font = { bold: true, color: { argb: 'FFD1D5DB' } };
+            row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+            row.getCell(2).font = { color: { argb: 'FF34D399' } };
+        });
+        if (resumenSheet.rowCount > 2) {
+            resumenSheet.autoFilter = { from: 'A2', to: `B${resumenSheet.rowCount}` };
+        }
 
-    await buildDiarioSheet();
-    buildResumenSheet();
-        writeTabla(ensureSheet('Semanal'), 'Reporte Semanal', semanal);
-        writeTabla(ensureSheet('Mensual'), 'Reporte Mensual', mensual);
-        writeTabla(ensureSheet('Anual'), 'Reporte Anual', anual);
+        const productosSheet = ensureSheet('Productos Agregados', workbook);
+        clearSheet(productosSheet);
+        await addHeaderAndLogo(productosSheet, 'Análisis de Productos Vendidos', ['Producto', 'N° Ventas', 'Cantidad Total', 'Importe Total'], workbook);
+        const productosData = productosRows.map((producto) => [producto.nombre, producto.ventas, producto.cantidad, producto.importe]);
+        writeAggregatedTable(productosSheet, ['Producto', 'N° Ventas', 'Cantidad Total', 'Importe Total'], productosData);
+        productosSheet.getColumn(1).width = Math.max(30, ...productosRows.map((p) => (p.nombre || '').length + 4));
+        productosSheet.getColumn(2).width = 14;
+        productosSheet.getColumn(3).width = 16;
+        productosSheet.getColumn(4).width = 18;
+        productosSheet.getColumn(2).numFmt = '0';
+        productosSheet.getColumn(3).numFmt = '0';
+        productosSheet.getColumn(4).numFmt = '$#,##0.00';
+        if (productosSheet.rowCount > 2) {
+            productosSheet.autoFilter = { from: 'A2', to: `D${productosSheet.rowCount}` };
+        }
 
-        // 4. Guardar
         const buffer = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buffer], { type: 'application/octet-stream' }), `reporte_plantilla_${Date.now()}.xlsx`);
+        const fecha = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        saveAs(new Blob([buffer], { type: 'application/octet-stream' }), `Manantial_reporte_completo_${fecha}.xlsx`);
         showExportToast();
     };
 
@@ -1454,6 +1778,39 @@ export default function SalesScreen({ user }) {
             toastId: toastId,
             position: "top-right", 
             autoClose: 7000, 
+            closeButton: false,
+            draggable: false,
+            theme: "dark",
+        });
+    };
+    
+    // Confirmación Toastify para Exportar con PLANTILLA
+    const handleExportTemplate = () => {
+        const toastId = 'export-template-confirm';
+        toast(({ closeToast }) => (
+            <div className="p-1">
+                <p className="font-semibold text-gray-200 text-sm mb-2">
+                    ¿Desea generar el reporte con plantilla (Diario/Semanal/Mensual/Anual) usando el historial?
+                </p>
+                <div className="flex gap-3 justify-end">
+                    <button
+                        onClick={() => toast.dismiss(toastId)}
+                        className="text-white bg-gray-600 hover:bg-gray-700 px-3 py-1 text-xs rounded transition-colors shadow-md border border-gray-500"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={() => { executeTemplateExport(); toast.dismiss(toastId); }}
+                        className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 text-xs rounded transition-colors font-bold shadow-md"
+                    >
+                        Sí, Exportar Plantilla
+                    </button>
+                </div>
+            </div>
+        ), {
+            toastId: toastId,
+            position: "top-right",
+            autoClose: 7000,
             closeButton: false,
             draggable: false,
             theme: "dark",
@@ -1688,10 +2045,9 @@ export default function SalesScreen({ user }) {
                             Exportar Básico
                         </button>
                         <button 
-                            onClick={executeTemplateExport} 
+                            onClick={handleExportTemplate} 
                             title="Usar plantilla Excel con secciones Diario/Semanal/Mensual/Anual" 
-                            className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-green-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2 flex-1 md:flex-none justify-center"
-                        >
+                            className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-blue-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2 flex-1 md:flex-none justify-center"                        >
                             <Download size={25} />
                             Exportar Plantilla
                         </button>
@@ -1703,7 +2059,8 @@ export default function SalesScreen({ user }) {
                             <Trash2 size={25} />
                             Eliminar Todo
                         </button>
-                    </div>
+                       
+                    </div>  
                 )}
             </div>
 
@@ -1730,6 +2087,8 @@ export default function SalesScreen({ user }) {
             {/* -------------------------------------------------------- */}
             {/* SECCIÓN 2: HISTORIAL DE VENTAS (A ANCHO COMPLETO) */}
             {/* -------------------------------------------------------- */}
+             {user?.role === 'admin' && (
+                <>
             <h2 className="text-2xl font-bold text-blue-300 mb-3">Historial de Ventas</h2>
             <div className="bg-gray-800/80 rounded-xl shadow-2xl border border-blue-700/30 overflow-x-auto">
                 <table className="w-full text-left text-gray-300">
@@ -1800,6 +2159,8 @@ export default function SalesScreen({ user }) {
                     </tbody>
                 </table>
             </div>
+            </>
+            )}
         </div>
     );
 }
