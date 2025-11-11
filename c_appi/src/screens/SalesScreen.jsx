@@ -36,7 +36,11 @@ const showErrorToast = (message) => {
         theme: "dark",
     });
 };
-
+// --- helper: generar sello de fecha legible para archivos ---
+const getDateStamp = (d = new Date()) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+};
 
 // --- COMPONENTE DE ESTADO (Se mantiene igual) ---
 const StatusBadge = ({ status }) => {
@@ -545,6 +549,7 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                                     const p = productosInventario.find(x => x.id === fid); 
                                     if (!p || (parseInt(p.stock) || 0) <= 0) return null; 
                                     return (
+                                        // <button key={fid} type="button" onClick={() => handleProductButtonClick(p)} className="flex-shrink-0 px-2 py-0.5 bg-yellow-500 text-black rounded-lg font-semibold text-xs">
                                         <button key={fid} type="button" onClick={() => handleProductButtonClick(p)} className="flex-shrink-0 px-2 py-0.5 bg-yellow-500 text-black rounded-lg font-semibold text-xs">
                                             {p.nombre}
                                         </button>
@@ -562,10 +567,12 @@ const SaleTerminal = ({ currentSale, onSave, isLoading, productosInventario, onC
                                         <p className="text-[10px] opacity-60">Stock: {producto.stock} · ${parseFloat(producto.precio).toFixed(2)}</p>
                                     </div>
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                        <button onClick={() => toggleFavorito(producto.id)} title="Favorito" className={`p-1 rounded-full shadow-lg ${favoritos.includes(producto.id) ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-white'}`}>
+                                        {/* <button onClick={() => toggleFavorito(producto.id)} title="Favorito" className={`p-1 rounded-full shadow-lg ${favoritos.includes(producto.id) ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-white'}`}> */}
+                                        <button type="button" onClick={() => toggleFavorito(producto.id)} title="Favorito" className={`p-1 rounded-full shadow-lg ${favoritos.includes(producto.id) ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-white'}`}>
                                             <Star size={12} />
                                         </button>
-                                        <button onClick={() => handleProductButtonClick(producto)} className="px-2 py-0.5 bg-blue-600 rounded text-white font-semibold text-xs">Añadir</button>
+                                        {/* <button onClick={() => handleProductButtonClick(producto)} className="px-2 py-0.5 bg-blue-600 rounded text-white font-semibold text-xs">Añadir</button> */}
+                                        <button type="button" onClick={() => handleProductButtonClick(producto)} className="px-2 py-0.5 bg-blue-600 rounded text-white font-semibold text-xs">Añadir</button>
                                     </div>
                                 </div>
                             ))}
@@ -1218,7 +1225,8 @@ export default function SalesScreen({ user }) {
 
         // Generar archivo y descargar
         const buf = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buf], { type: 'application/octet-stream' }), `ventas_${Date.now()}.xlsx`);
+        const stamp = getDateStamp();
+        saveAs(new Blob([buf], { type: 'application/octet-stream' }), `ventas_${stamp}.xlsx`);
         showExportToast();
     };
 
@@ -1414,7 +1422,8 @@ export default function SalesScreen({ user }) {
 
         // 4. Guardar
         const buffer = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buffer], { type: 'application/octet-stream' }), `reporte_plantilla_${Date.now()}.xlsx`);
+        const stamp = getDateStamp();
+        saveAs(new Blob([buffer], { type: 'application/octet-stream' }), `reporte_plantilla_${stamp}.xlsx`);
         showExportToast();
     };
 
