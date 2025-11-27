@@ -1027,7 +1027,7 @@ export default function SalesScreen({ user }) {
         }
 
         // Header (Fila 2)
-        const header = ['ID Venta','Fecha','Total','Estado','Monto Recibido','Cambio','Productos'];
+        const header = ['ID Venta','Fecha','Total','Total -30%','Estado','Monto Recibido','Cambio','Productos'];
         const headerRow = sheet.addRow(header);
         headerRow.eachCell((cell) => {
             cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
@@ -1047,10 +1047,14 @@ export default function SalesScreen({ user }) {
             const fecha = new Date(s.date);
             const fechaExcel = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()}`;
             const productos = (s.items||[]).map(i => `${i.nombre} (${i.cantidad})`).join(', ');
+            const totalVal = Number((s.total||0).toFixed(2));
+            const totalMenos30 = Number((totalVal * 0.7).toFixed(2));
+            
             const row = sheet.addRow([
                 s.id,
                 fechaExcel,
-                Number((s.total||0).toFixed(2)),
+                totalVal,
+                totalMenos30,
                 s.status,
                 Number((s.montoRecibido||0).toFixed(2)),
                 Number((s.cambio||0).toFixed(2)),
@@ -1058,15 +1062,15 @@ export default function SalesScreen({ user }) {
             ]);
 
             row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                const isTotalColumn = colNumber === 3 || colNumber === 5 || colNumber === 6;
-                const isStatusColumn = colNumber === 4;
-                const isProductsColumn = colNumber === 7;
+                const isTotalColumn = colNumber === 3 || colNumber === 4 || colNumber === 6 || colNumber === 7;
+                const isStatusColumn = colNumber === 5;
+                const isProductsColumn = colNumber === 8;
 
-                cell.font = { color: { argb: colNumber === 3 ? 'FF34D399' : 'FFD1D5DB' } };
+                cell.font = { color: { argb: (colNumber === 3 || colNumber === 4) ? 'FF34D399' : 'FFD1D5DB' } };
                 cell.alignment = { horizontal: isProductsColumn ? 'left' : 'center', vertical: 'top', wrapText: isProductsColumn };
 
                 if (isTotalColumn) cell.numFmt = '$#,##0.00';
-                if (colNumber === 6) cell.font = { color: { argb: (s.cambio || 0) < 0 ? 'FFE57373' : 'FF34D399' } };
+                if (colNumber === 7) cell.font = { color: { argb: (s.cambio || 0) < 0 ? 'FFE57373' : 'FF34D399' } };
 
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: row.number % 2 === 0 ? 'FF111827' : 'FF1F2937' } };
                 cell.border = {
@@ -1091,7 +1095,7 @@ export default function SalesScreen({ user }) {
                 }
             });
 
-            const productosColIndex = 7;
+            const productosColIndex = 8;
             const text = String(row.getCell(productosColIndex).value || '');
             const charsPerLine = 40;
             const approxLines = Math.max(1, Math.ceil(text.length / charsPerLine));
@@ -1099,7 +1103,7 @@ export default function SalesScreen({ user }) {
         }
 
         const dataEndRow = sheet.rowCount;
-        const totalsRow = sheet.addRow(['', 'TOTALES:', { formula: `SUM(C${dataStartRow}:C${dataEndRow})` }, '', { formula: `SUM(E${dataStartRow}:E${dataEndRow})` }, { formula: `SUM(F${dataStartRow}:F${dataEndRow})` }, '' ]);
+        const totalsRow = sheet.addRow(['', 'TOTALES:', { formula: `SUM(C${dataStartRow}:C${dataEndRow})` }, { formula: `SUM(D${dataStartRow}:D${dataEndRow})` }, '', { formula: `SUM(F${dataStartRow}:F${dataEndRow})` }, { formula: `SUM(G${dataStartRow}:G${dataEndRow})` }, '' ]);
         totalsRow.eachCell((cell) => {
             cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
             cell.border = {
@@ -1111,13 +1115,14 @@ export default function SalesScreen({ user }) {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
         });
         totalsRow.getCell(3).numFmt = '$#,##0.00';
-        totalsRow.getCell(5).numFmt = '$#,##0.00';
+        totalsRow.getCell(4).numFmt = '$#,##0.00';
         totalsRow.getCell(6).numFmt = '$#,##0.00';
+        totalsRow.getCell(7).numFmt = '$#,##0.00';
         totalsRow.height = 30;
 
-        const colWidths = [18, 14, 14, 12, 14, 12, 50];
+        const colWidths = [18, 14, 14, 14, 12, 14, 12, 50];
         colWidths.forEach((w, i) => { sheet.getColumn(i + 1).width = w; });
-        sheet.autoFilter = { from: 'A2', to: `G${dataEndRow}` };
+        sheet.autoFilter = { from: 'A2', to: `H${dataEndRow}` };
 
         // ========================= HOJA 2: RESUMEN (BÁSICO) =========================
         const resumen = workbook.addWorksheet('Resumen Básico');
@@ -1736,6 +1741,159 @@ export default function SalesScreen({ user }) {
             productosSheet.autoFilter = { from: 'A2', to: `D${productosSheet.rowCount}` };
         }
 
+        // Nueva funcionalidad: Crear hojas mensuales día por día con Total Neto -30%
+        const buildMonthlyDailySheets = async () => {
+            // Agrupar ventas por mes/año
+            const ventasPorMes = new Map();
+            
+            for (const v of ventasBase) {
+                const fecha = parseFecha(v.date) || new Date(v.date);
+                const mes = fecha.getMonth() + 1; // 1-12
+                const año = fecha.getFullYear();
+                const dia = fecha.getDate();
+                const mesKey = `${año}-${String(mes).padStart(2,'0')}`; // "2025-11"
+                
+                if (!ventasPorMes.has(mesKey)) {
+                    ventasPorMes.set(mesKey, {
+                        mes,
+                        año,
+                        ventasPorDia: new Map()
+                    });
+                }
+                
+                const mesData = ventasPorMes.get(mesKey);
+                const totalNeto = Number((v.total || 0) * 0.7);
+                
+                if (mesData.ventasPorDia.has(dia)) {
+                    mesData.ventasPorDia.set(dia, mesData.ventasPorDia.get(dia) + totalNeto);
+                } else {
+                    mesData.ventasPorDia.set(dia, totalNeto);
+                }
+            }
+            
+            // Crear una hoja por cada mes
+            const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                                  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            
+            for (const [mesKey, mesData] of Array.from(ventasPorMes.entries()).sort()) {
+                const { mes, año, ventasPorDia } = mesData;
+                const nombreMes = nombresMeses[mes - 1];
+                const sheetName = `${nombreMes} ${año} -30%`;
+                
+                const sheet = ensureSheet(sheetName, workbook);
+                clearSheet(sheet);
+                
+                // Configurar propiedades de la hoja (igual que otras hojas)
+                sheet.properties.defaultRowHeight = 20;
+                sheet.views = [{ state: 'frozen', ySplit: 2, showGridLines: false }];
+                
+                // Título con el mismo estilo que otras hojas
+                sheet.mergeCells('A1:B1');
+                sheet.getRow(1).height = 56;
+                const titleCell = sheet.getCell('A1');
+                titleCell.value = `REPORTE DIARIO NETO -30% (${nombreMes} ${año})`;
+                titleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+                titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+                titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF0F172A'} };
+                
+                // Añadir logo (igual que otras hojas)
+                const logo = await loadLogo();
+                if (logo) {
+                    try {
+                        const imgId = workbook.addImage({ base64: logo.base64, extension: logo.ext });
+                        sheet.addImage(imgId, { tl: { col: 1.15, row: 0.1 }, br: { col: 2.02, row: 1.2 } });
+                    } catch (error) {
+                        console.warn('No se pudo añadir el logo a la hoja mensual:', error);
+                    }
+                }
+                
+                // Header con el mismo estilo que otras hojas
+                const headerRow = sheet.addRow(['Fecha', 'Total Neto -30%']);
+                headerRow.height = 28;
+                headerRow.eachCell((cell) => {
+                    cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FF374151' } },
+                        left: { style: 'thin', color: { argb: 'FF374151' } },
+                        bottom: { style: 'medium', color: { argb: 'FF374151' } },
+                        right: { style: 'thin', color: { argb: 'FF374151' } }
+                    };
+                });
+                
+                // Obtener número de días del mes
+                const diasEnMes = new Date(año, mes, 0).getDate();
+                
+                const dataStartRow = sheet.rowCount + 1;
+                
+                // Agregar TODOS los días del mes (del 1 al último día)
+                for (let dia = 1; dia <= diasEnMes; dia++) {
+                    const fechaStr = `${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}/${año}`;
+                    const totalNeto = ventasPorDia.get(dia) || null;
+                    
+                    const row = sheet.addRow([fechaStr, totalNeto !== null ? Number(totalNeto.toFixed(2)) : '']);
+                    
+                    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                        // Aplicar el mismo estilo que las otras tablas
+                        const isTotalColumn = colNumber === 2;
+                        
+                        cell.font = { color: { argb: isTotalColumn ? 'FF34D399' : 'FFD1D5DB' } };
+                        cell.alignment = { 
+                            horizontal: colNumber === 1 ? 'center' : 'center', 
+                            vertical: 'middle' 
+                        };
+                        
+                        if (isTotalColumn && totalNeto !== null) {
+                            cell.numFmt = '$#,##0.00';
+                        }
+                        
+                        // Alternar colores de fondo (igual que otras tablas)
+                        const bgColor = row.number % 2 === 1 ? 'FF111827' : 'FF1F2937';
+                        cell.fill = { 
+                            type: 'pattern', 
+                            pattern: 'solid', 
+                            fgColor: { argb: totalNeto === null ? 'FF374151' : bgColor }
+                        };
+                        
+                        cell.border = {
+                            top: { style: 'thin', color: { argb: 'FF374151' } },
+                            left: { style: 'thin', color: { argb: 'FF374151' } },
+                            bottom: { style: 'thin', color: { argb: 'FF374151' } },
+                            right: { style: 'thin', color: { argb: 'FF374151' } }
+                        };
+                    });
+                }
+                
+                const dataEndRow = sheet.rowCount;
+                
+                // Fila de total con el mismo estilo que otras hojas
+                const totalsRow = sheet.addRow(['TOTALES:', { formula: `SUM(B${dataStartRow}:B${dataEndRow})` }]);
+                totalsRow.height = 30;
+                totalsRow.eachCell((cell) => {
+                    cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = {
+                        top: { style: 'thick', color: { argb: 'FF3B82F6' } },
+                        left: { style: 'thin', color: { argb: 'FF374151' } },
+                        bottom: { style: 'thin', color: { argb: 'FF374151' } },
+                        right: { style: 'thin', color: { argb: 'FF374151' } }
+                    };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
+                });
+                totalsRow.getCell(2).numFmt = '$#,##0.00';
+                
+                // Ajustar anchos (más amplios para mejor visualización)
+                sheet.getColumn(1).width = 18;
+                sheet.getColumn(2).width = 20;
+                
+                // Añadir autofiltro
+                sheet.autoFilter = { from: 'A2', to: `B${dataEndRow}` };
+            }
+        };
+        
+        await buildMonthlyDailySheets();
+
         const buffer = await workbook.xlsx.writeBuffer();
         const fecha = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
         saveAs(new Blob([buffer], { type: 'application/octet-stream' }), `Manantial_reporte_completo_${fecha}.xlsx`);
@@ -1803,7 +1961,7 @@ export default function SalesScreen({ user }) {
                         onClick={() => { executeTemplateExport(); toast.dismiss(toastId); }}
                         className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 text-xs rounded transition-colors font-bold shadow-md"
                     >
-                        Sí, Exportar Plantilla
+                        Sí, Exportar completo
                     </button>
                 </div>
             </div>
@@ -2049,7 +2207,7 @@ export default function SalesScreen({ user }) {
                             title="Usar plantilla Excel con secciones Diario/Semanal/Mensual/Anual" 
                             className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-blue-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2 flex-1 md:flex-none justify-center"                        >
                             <Download size={25} />
-                            Exportar Plantilla
+                            Exportar Completo 
                         </button>
                         {/* Botón para Eliminar Todo */}
                         <button 
