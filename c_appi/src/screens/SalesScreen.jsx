@@ -1742,7 +1742,7 @@ export default function SalesScreen({ user }) {
         }
 
         // Nueva funcionalidad: Crear hojas mensuales día por día con Total Neto -30%
-        const buildMonthlyDailySheets = () => {
+        const buildMonthlyDailySheets = async () => {
             // Agrupar ventas por mes/año
             const ventasPorMes = new Map();
             
@@ -1783,22 +1783,43 @@ export default function SalesScreen({ user }) {
                 const sheet = ensureSheet(sheetName, workbook);
                 clearSheet(sheet);
                 
-                // Título
-                sheet.mergeCells('A1:B1');
-                const titleCell = sheet.getCell('A1');
-                titleCell.value = `Reporte Diario Neto -30% (${nombreMes} ${año})`;
-                titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-                titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-                titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1F2937'} };
-                sheet.getRow(1).height = 24;
+                // Configurar propiedades de la hoja (igual que otras hojas)
+                sheet.properties.defaultRowHeight = 20;
+                sheet.views = [{ state: 'frozen', ySplit: 2, showGridLines: false }];
                 
-                // Header
+                // Título con el mismo estilo que otras hojas
+                sheet.mergeCells('A1:B1');
+                sheet.getRow(1).height = 56;
+                const titleCell = sheet.getCell('A1');
+                titleCell.value = `REPORTE DIARIO NETO -30% (${nombreMes} ${año})`;
+                titleCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+                titleCell.font = { bold: true, size: 16, color: { argb: 'FFFFFFFF' } };
+                titleCell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF0F172A'} };
+                
+                // Añadir logo (igual que otras hojas)
+                const logo = await loadLogo();
+                if (logo) {
+                    try {
+                        const imgId = workbook.addImage({ base64: logo.base64, extension: logo.ext });
+                        sheet.addImage(imgId, { tl: { col: 1.15, row: 0.1 }, br: { col: 2.02, row: 1.2 } });
+                    } catch (error) {
+                        console.warn('No se pudo añadir el logo a la hoja mensual:', error);
+                    }
+                }
+                
+                // Header con el mismo estilo que otras hojas
                 const headerRow = sheet.addRow(['Fecha', 'Total Neto -30%']);
+                headerRow.height = 28;
                 headerRow.eachCell((cell) => {
-                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B63A9' } };
-                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                    cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'FF374151' } },
+                        left: { style: 'thin', color: { argb: 'FF374151' } },
+                        bottom: { style: 'medium', color: { argb: 'FF374151' } },
+                        right: { style: 'thin', color: { argb: 'FF374151' } }
+                    };
                 });
                 
                 // Obtener número de días del mes
@@ -1812,39 +1833,66 @@ export default function SalesScreen({ user }) {
                     const totalNeto = ventasPorDia.get(dia) || null;
                     
                     const row = sheet.addRow([fechaStr, totalNeto !== null ? Number(totalNeto.toFixed(2)) : '']);
-                    if (totalNeto !== null) {
-                        row.getCell(2).numFmt = '$#,##0.00';
-                    }
-                    row.eachCell((cell) => {
-                        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-                    });
                     
-                    // Resaltar días sin ventas con fondo gris claro
-                    if (totalNeto === null) {
-                        row.eachCell((cell) => {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
-                        });
-                    }
+                    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                        // Aplicar el mismo estilo que las otras tablas
+                        const isTotalColumn = colNumber === 2;
+                        
+                        cell.font = { color: { argb: isTotalColumn ? 'FF34D399' : 'FFD1D5DB' } };
+                        cell.alignment = { 
+                            horizontal: colNumber === 1 ? 'center' : 'center', 
+                            vertical: 'middle' 
+                        };
+                        
+                        if (isTotalColumn && totalNeto !== null) {
+                            cell.numFmt = '$#,##0.00';
+                        }
+                        
+                        // Alternar colores de fondo (igual que otras tablas)
+                        const bgColor = row.number % 2 === 1 ? 'FF111827' : 'FF1F2937';
+                        cell.fill = { 
+                            type: 'pattern', 
+                            pattern: 'solid', 
+                            fgColor: { argb: totalNeto === null ? 'FF374151' : bgColor }
+                        };
+                        
+                        cell.border = {
+                            top: { style: 'thin', color: { argb: 'FF374151' } },
+                            left: { style: 'thin', color: { argb: 'FF374151' } },
+                            bottom: { style: 'thin', color: { argb: 'FF374151' } },
+                            right: { style: 'thin', color: { argb: 'FF374151' } }
+                        };
+                    });
                 }
                 
                 const dataEndRow = sheet.rowCount;
                 
-                // Fila de total (solo suma las celdas que tienen valores)
-                const totalsRow = sheet.addRow(['TOTAL', { formula: `SUM(B${dataStartRow}:B${dataEndRow})` }]);
+                // Fila de total con el mismo estilo que otras hojas
+                const totalsRow = sheet.addRow(['TOTALES:', { formula: `SUM(B${dataStartRow}:B${dataEndRow})` }]);
+                totalsRow.height = 30;
                 totalsRow.eachCell((cell) => {
-                    cell.font = { bold: true };
-                    cell.border = { top: {style:'double'}, left: {style:'thin'}, bottom: {style:'double'}, right: {style:'thin'} };
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+                    cell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = {
+                        top: { style: 'thick', color: { argb: 'FF3B82F6' } },
+                        left: { style: 'thin', color: { argb: 'FF374151' } },
+                        bottom: { style: 'thin', color: { argb: 'FF374151' } },
+                        right: { style: 'thin', color: { argb: 'FF374151' } }
+                    };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
                 });
                 totalsRow.getCell(2).numFmt = '$#,##0.00';
                 
-                // Ajustar anchos
-                sheet.getColumn(1).width = 16;
-                sheet.getColumn(2).width = 18;
+                // Ajustar anchos (más amplios para mejor visualización)
+                sheet.getColumn(1).width = 18;
+                sheet.getColumn(2).width = 20;
+                
+                // Añadir autofiltro
+                sheet.autoFilter = { from: 'A2', to: `B${dataEndRow}` };
             }
         };
         
-        buildMonthlyDailySheets();
+        await buildMonthlyDailySheets();
 
         const buffer = await workbook.xlsx.writeBuffer();
         const fecha = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -1913,7 +1961,7 @@ export default function SalesScreen({ user }) {
                         onClick={() => { executeTemplateExport(); toast.dismiss(toastId); }}
                         className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 text-xs rounded transition-colors font-bold shadow-md"
                     >
-                        Sí, Exportar Plantilla
+                        Sí, Exportar completo
                     </button>
                 </div>
             </div>
@@ -2159,7 +2207,7 @@ export default function SalesScreen({ user }) {
                             title="Usar plantilla Excel con secciones Diario/Semanal/Mensual/Anual" 
                             className="flex items-center gap-2 relative p-px font-semibold leading-6 text-white bg-[#1a1a1a] hover:bg-blue-700 shadow-2xl cursor-pointer rounded-xl shadow-zinc-900 transition-transform duration-300 ease-in-out hover:scale-105 active:scale-95 px-4 py-2 flex-1 md:flex-none justify-center"                        >
                             <Download size={25} />
-                            Exportar Plantilla
+                            Exportar Completo 
                         </button>
                         {/* Botón para Eliminar Todo */}
                         <button 
